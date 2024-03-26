@@ -1,0 +1,12 @@
+Release Name:           dm-wifi-cli-frdm-mcxn947
+Release Version:        1.0
+Outgoing License:       BSD-3-Clause
+licence in files:       Licence.txt
+Description:            This demo is an example of cli using M2 module in FRDM MCXN947.
+Release location:       https://github.com/nxp-appcodehub/dm-industrial-panel-wifi-frdm-mcxn947
+Origin:                 NXP (BSD-3-clause)
+                        ARM CMSIS v5.9.0 (Apache-2.0) - https://github.com/ARM-software/CMSIS_5/releases/tag/5.9.0
+                        Amazon FreeRTOS v11.0.1 (MIT) - https://github.com/FreeRTOS/FreeRTOS-Kernel
+                        lwIP v2024-02-19 (BSD-3-Clause) - http://savannah.nongnu.org/projects/lwip
+                        Wi-Fi module Tx power limits v1.0.0 Murata Manufacturing Co., LTD (BSD-3-clause)
+                        NXP Wi-Fi driver v1.3.48.p16 (BSD-3-Clause)
