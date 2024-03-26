@@ -1,4 +1,4 @@
-Release Name: 		dm-wifi-cli-frdm-mcx-n947
+Release Name: 		dm-wifi-cli-frdm-mcxn947
 Release Version: 	1.0
 Outgoing License: 	LA_OPT_NXP_Software_License v54 February 2024 - Additional Distribution License granted, license in Section 2.3 applies
 License in File: 	Licence.txt

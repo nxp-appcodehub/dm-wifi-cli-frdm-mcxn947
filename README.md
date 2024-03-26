@@ -40,7 +40,7 @@ This is an example of cli use with wifi on frdm-mcxn947
 - [FRDM-MCXN947.](https://www.nxp.com/products/processors-and-microcontrollers/arm-microcontrollers/general-purpose-mcus/mcx-arm-cortex-m/mcx-n94x-and-n54x-mcus-with-dual-core-arm-cortex-m33-eiq-neutron-npu-and-edgelock-secure-enclave-core-profile:MCX-N94X-N54X)
 - Personal computer
 - USB Type C cable
-- WiFi module
+- [WiFi module](https://www.embeddedartists.com/products/1xk-m-2-module/) 
 
 ## 3. Setup<a name="step3"></a>
 
