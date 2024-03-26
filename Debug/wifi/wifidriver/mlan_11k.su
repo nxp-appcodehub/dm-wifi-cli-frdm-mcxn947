@@ -1,0 +1,8 @@
+../wifi/wifidriver/mlan_11k.c:286:6:wlan_rrm_matched_ap_found	16	static
+../wifi/wifidriver/mlan_11k.c:427:6:wlan_add_rm_beacon_report	88	static
+../wifi/wifidriver/mlan_11k.c:637:6:wlan_send_mgmt_rm_beacon_report	32	static
+../wifi/wifidriver/mlan_11k.c:682:6:wlan_process_radio_measurement_request	176	static
+../wifi/wifidriver/mlan_11k.c:776:6:wlan_process_link_measurement_request	56	static
+../wifi/wifidriver/mlan_11k.c:866:6:wlan_process_neighbor_report_response	24	static
+../wifi/wifidriver/mlan_11k.c:956:6:wlan_dot11k_formatRrmCapabilities	8	static
+../wifi/wifidriver/mlan_11k.c:974:5:wlan_send_mgmt_rm_neighbor_request	32	static

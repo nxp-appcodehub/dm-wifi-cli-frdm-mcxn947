@@ -1,0 +1,7 @@
+../wifi/dhcpd/dns-server.c:129:12:process_dns_message	56	static
+../wifi/dhcpd/dns-server.c:209:6:dhcp_enable_dns_server	40	static
+../wifi/dhcpd/dns-server.c:235:5:dns_server_init	16	static
+../wifi/dhcpd/dns-server.c:254:6:dns_process_packet	40	static
+../wifi/dhcpd/dns-server.c:272:10:dns_get_nameserver	0	static
+../wifi/dhcpd/dns-server.c:281:5:dns_get_maxsock	0	static
+../wifi/dhcpd/dns-server.c:294:6:dns_free_allocations	16	static

@@ -1,0 +1,8 @@
+../board/sdmmc_config.c:54:6:BOARD_SDCardGetDetectStatus	16	static
+../board/sdmmc_config.c:69:6:SDMMC_SD_CD_Callback	8	static
+../board/sdmmc_config.c:185:6:BOARD_SDCardPowerControl	8	static
+../board/sdmmc_config.c:44:10:BOARD_USDHC1ClockConfiguration	8	static
+../board/sdmmc_config.c:77:6:BOARD_SDCardDAT3PullFunction	0	static
+../board/sdmmc_config.c:131:6:BOARD_SDCardDetectInit	32	static
+../board/sdmmc_config.c:174:6:BOARD_SDCardPowerResetInit	16	static
+../board/sdmmc_config.c:224:6:BOARD_SDIO_Config	24	static

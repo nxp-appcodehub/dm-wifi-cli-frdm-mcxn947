@@ -1,0 +1,9 @@
+../source/main.c:96:13:printSeparator	8	static
+../source/main.c:108:5:wlan_event_callback	144	static
+../source/main.c:334:5:wlan_driver_init	8	static
+../source/main.c:351:5:wlan_driver_deinit	8	static
+../source/main.c:369:5:wlan_driver_reset	8	static
+../source/main.c:384:13:test_wlan_reset	8	static
+../source/main.c:403:5:wlan_reset_cli_init	8	static
+../source/main.c:562:6:task_main	8	static
+../source/main.c:611:5:main	16	static

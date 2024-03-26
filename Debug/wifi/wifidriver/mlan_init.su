@@ -1,0 +1,7 @@
+../wifi/wifidriver/mlan_init.c:143:13:wlan_allocate_adapter	16	static
+../wifi/wifidriver/mlan_init.c:259:6:wlan_clear_scan_bss	8	static
+../wifi/wifidriver/mlan_init.c:272:13:wlan_init_priv	16	static
+../wifi/wifidriver/mlan_init.c:473:8:wlan_init_adapter	16	static
+../wifi/wifidriver/mlan_init.c:792:13:wlan_init_lock_list	40	static
+../wifi/wifidriver/mlan_init.c:1054:13:wlan_init_fw	16	static
+../wifi/wifidriver/mlan_init.c:1121:8:wlan_free_adapter	8	static

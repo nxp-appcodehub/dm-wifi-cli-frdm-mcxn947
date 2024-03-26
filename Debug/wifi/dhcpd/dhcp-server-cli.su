@@ -1,0 +1,3 @@
+../wifi/dhcpd/dhcp-server-cli.c:26:13:test_dhcp_stat	8	static
+../wifi/dhcpd/dhcp-server-cli.c:35:5:dhcpd_cli_init	8	static
+../wifi/dhcpd/dhcp-server-cli.c:50:5:dhcpd_cli_deinit	8	static

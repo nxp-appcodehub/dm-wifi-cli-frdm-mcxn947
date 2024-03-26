@@ -1,0 +1,2 @@
+../wifi/wifidriver/mlan_uap_cmdevent.c:2270:6:wlan_check_sta_capability	56	static
+../wifi/wifidriver/mlan_uap_cmdevent.c:2851:13:wlan_ops_uap_prepare_cmd	88	static

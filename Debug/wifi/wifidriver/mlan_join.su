@@ -1,0 +1,6 @@
+../wifi/wifidriver/mlan_join.c:818:6:wlan_ft_akm_is_used	32	static
+../wifi/wifidriver/mlan_join.c:1504:13:wlan_ret_802_11_associate	24	static
+../wifi/wifidriver/mlan_join.c:2443:13:wlan_associate	32	static
+../wifi/wifidriver/mlan_join.c:2638:6:wlan_band_to_radio_type	0	static
+../wifi/wifidriver/mlan_join.c:953:13:wlan_cmd_802_11_associate	152	static
+../wifi/wifidriver/mlan_join.c:2663:6:wlan_use_non_default_ht_vht_cap	0	static

@@ -1,0 +1,4 @@
+../lwip/src/netif/lowpan6_common.c:115:1:lowpan6_context_lookup	8	static
+../lwip/src/netif/lowpan6_common.c:65:1:lowpan6_get_address_mode	16	static
+../lwip/src/netif/lowpan6_common.c:132:1:lowpan6_compress_headers	120	static
+../lwip/src/netif/lowpan6_common.c:803:1:lowpan6_decompress	48	static

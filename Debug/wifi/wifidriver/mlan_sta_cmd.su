@@ -1,0 +1,8 @@
+../wifi/wifidriver/mlan_sta_cmd.c:809:26:wlan_cmd_802_11_deauthenticate	16	static
+../wifi/wifidriver/mlan_sta_cmd.c:1543:26:wlan_cmd_reg_access	0	static
+../wifi/wifidriver/mlan_sta_cmd.c:1627:13:wlan_cmd_mem_access	0	static
+../wifi/wifidriver/mlan_sta_cmd.c:1653:13:wlan_cmd_auto_reconnect	0	static
+../wifi/wifidriver/mlan_sta_cmd.c:1680:13:wlan_cmd_rx_mgmt_indication	4	static
+../wifi/wifidriver/mlan_sta_cmd.c:1786:5:wlan_parse_getdata	8	static
+../wifi/wifidriver/mlan_sta_cmd.c:1921:13:wlan_cmd_subscribe_event	4	static
+../wifi/wifidriver/mlan_sta_cmd.c:2311:13:wlan_ops_sta_prepare_cmd	56	static

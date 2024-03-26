@@ -1,0 +1,6 @@
+../wifi/nw_utils/wifi_ping.c:21:22:get_netif_up	0	static
+../wifi/nw_utils/wifi_ping.c:87:20:ip_to_str	8	static
+../wifi/nw_utils/wifi_ping.c:257:12:ping	192	static
+../wifi/nw_utils/wifi_ping.c:407:13:cmd_ping	64	static
+../wifi/nw_utils/wifi_ping.c:520:5:ping_cli_init	8	static
+../wifi/nw_utils/wifi_ping.c:533:5:ping_cli_deinit	8	static

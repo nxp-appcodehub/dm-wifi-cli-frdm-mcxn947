@@ -1,0 +1,15 @@
+../wifi/cli/cli.c:1077:6:help_command	32	static
+../wifi/cli/cli.c:118:12:get_cmd_from_hist	16	static
+../wifi/cli/cli.c:312:13:cmd_hist_add	24	static
+../wifi/cli/cli.c:847:13:cli_main	56	static
+../wifi/cli/cli.c:282:5:cmd_hist_init	0	static
+../wifi/cli/cli.c:1040:5:cli_get_cmd_buffer	8	static
+../wifi/cli/cli.c:1052:5:cli_submit_cmd_buffer	8	static
+../wifi/cli/cli.c:1025:5:cli_stop	24	static
+../wifi/cli/cli.c:806:13:console_tick	48	static
+../wifi/cli/cli.c:1173:5:cli_register_command	4	static
+../wifi/cli/cli.c:1200:5:cli_unregister_command	8	static
+../wifi/cli/cli.c:1227:5:cli_register_commands	16	static
+../wifi/cli/cli.c:1240:5:cli_unregister_commands	16	static
+../wifi/cli/cli.c:1292:5:cli_init	16	static
+../wifi/cli/cli.c:1342:5:cli_deinit	8	static

@@ -1,0 +1,12 @@
+../lwip/src/core/ipv6/mld6.c:618:1:mld6_set_change_report_tmr	8	static
+../lwip/src/core/ipv6/mld6.c:728:1:mld6_report_change	8	static
+../lwip/src/core/ipv6/mld6.c:790:1:mld6_send	80	static
+../lwip/src/core/ipv6/mld6.c:137:1:mld6_stop	32	static
+../lwip/src/core/ipv6/mld6.c:193:1:mld6_report_groups	16	static
+../lwip/src/core/ipv6/mld6.c:217:1:mld6_lookfor_group	4	static
+../lwip/src/core/ipv6/mld6.c:283:1:mld6_input	48	static
+../lwip/src/core/ipv6/mld6.c:441:1:mld6_joingroup_netif	48	static
+../lwip/src/core/ipv6/mld6.c:409:1:mld6_joingroup	24	static
+../lwip/src/core/ipv6/mld6.c:542:1:mld6_leavegroup_netif	48	static
+../lwip/src/core/ipv6/mld6.c:509:1:mld6_leavegroup	24	static
+../lwip/src/core/ipv6/mld6.c:690:1:mld6_tmr	16	static
