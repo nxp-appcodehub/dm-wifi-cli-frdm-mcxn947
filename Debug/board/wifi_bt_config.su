@@ -1,2 +1,0 @@
-../board/wifi_bt_config.c:41:6:BOARD_WIFI_BT_Enable	8	static
-../board/wifi_bt_config.c:68:6:BOARD_WIFI_BT_Config	16	static

@@ -1,5 +1,0 @@
-../wifi/wifidriver/mlan_sta_ioctl.c:2792:6:wlan_get_random_charactor	0	static
-../wifi/wifidriver/mlan_sta_ioctl.c:3996:13:wlan_11d_cfg_ioctl	8	static
-../wifi/wifidriver/mlan_sta_ioctl.c:4470:26:wlan_misc_ioctl_region	16	static
-../wifi/wifidriver/mlan_sta_ioctl.c:4877:13:wlan_misc_ioctl_subscribe_evt	16	static
-../wifi/wifidriver/mlan_sta_ioctl.c:5937:13:wlan_ops_sta_ioctl	64	static

@@ -1,6 +1,0 @@
-../wifi/wifidriver/mlan_wmm.c:1036:8:wlan_clean_txrx	16	static
-../wifi/wifidriver/mlan_wmm.c:1085:6:wlan_wmm_default_queue_priorities	0	static
-../wifi/wifidriver/mlan_wmm.c:1273:8:wlan_init_wmm_param	8	static
-../wifi/wifidriver/mlan_wmm.c:1317:8:wlan_wmm_init	32	static
-../wifi/wifidriver/mlan_wmm.c:1448:12:wlan_wmm_get_ralist_node	24	static
-../wifi/wifidriver/mlan_wmm.c:1782:7:wlan_wmm_process_association_req	24	static

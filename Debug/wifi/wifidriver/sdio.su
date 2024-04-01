@@ -1,9 +1,0 @@
-../wifi/wifidriver/sdio.c:71:11:set_ioport_inmlan	0	static
-../wifi/wifidriver/sdio.c:76:14:wifi_get_sdio_ioport	0	static
-../wifi/wifidriver/sdio.c:80:10:wifi_get_sdio_outbuf	0	static
-../wifi/wifidriver/sdio.c:94:6:wlan_card_status	32	static
-../wifi/wifidriver/sdio.c:116:6:calculate_sdio_write_params	0	static
-../wifi/wifidriver/sdio.c:195:7:wlan_card_read_f1_base_regs	16	static
-../wifi/wifidriver/sdio.c:208:5:sdio_init	296	static
-../wifi/wifidriver/sdio.c:265:5:sdio_ioport_init	24	static
-../wifi/wifidriver/sdio.c:280:11:handle_cdint	0	static

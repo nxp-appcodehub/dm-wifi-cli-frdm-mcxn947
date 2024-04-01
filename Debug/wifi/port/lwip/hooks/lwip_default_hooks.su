@@ -1,2 +1,0 @@
-../wifi/port/lwip/hooks/lwip_default_hooks.c:18:15:lwip_hook_ip4_route_src	0	static
-../wifi/port/lwip/hooks/lwip_default_hooks.c:45:8:lwip_hook_tcp_out_add_tcpopts	40	static

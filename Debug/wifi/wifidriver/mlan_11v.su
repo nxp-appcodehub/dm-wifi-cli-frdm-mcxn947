@@ -1,3 +1,0 @@
-../wifi/wifidriver/mlan_11v.c:84:6:wlan_send_mgmt_wnm_btm_resp	40	static
-../wifi/wifidriver/mlan_11v.c:171:6:wlan_process_mgmt_wnm_btm_req	120	static
-../wifi/wifidriver/mlan_11v.c:310:5:wlan_send_mgmt_bss_trans_query	32	static
