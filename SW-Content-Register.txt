@@ -1,10 +1,10 @@
-Release Name: 		dm-wifi-cli-frdm-mcxn947
-Release Version: 	1.0
-Outgoing License: 	LA_OPT_NXP_Software_License v54 February 2024 - Additional Distribution License granted, license in Section 2.3 applies
-License in File: 	Licence.txt
-Description: 		This demo simulate an industrial panel with motor control, lvgl, temperature sensors, touch sensors, calculate cpu performance and use FreeRTOS.
-Release location: 	https://github.com/nxp-appcodehub/dm-industrial-panel-wifi-frdm-mcxn947
-Origin: 		NXP (BSD-3-clause)
-				NXP (Propietary)
-				ARM CMSIS (Apache-2.0) - https://github.com/ARM-software/CMSIS_5/releases/tag/5.8.0
-				FreeRTOS (MIT) - https://github.com/FreeRTOS
+Release Name:           dm-wifi-cli-frdm-mcxn947
+Release Version:        1.0
+Outgoing License:       BSD-3-Clause
+licence in files:       Licence.txt
+Description:            This demo is an example of cli using M2 module in FRDM MCXN947.
+Release location:       https://github.com/nxp-appcodehub/dm-industrial-panel-wifi-frdm-mcxn947
+Origin:                 NXP (BSD-3-clause)
+                        ARM CMSIS (Apache-2.0) - https://github.com/ARM-software/CMSIS_5/releases/tag/5.8.0
+                        Amazon FreeRTOS (MIT) - https://github.com/FreeRTOS/FreeRTOS-Kernel
+                        lwIP (BSD-3-Clause) - http://savannah.nongnu.org/projects/lwip
