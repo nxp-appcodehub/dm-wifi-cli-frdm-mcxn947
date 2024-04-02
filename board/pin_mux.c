@@ -114,10 +114,12 @@ void BOARD_InitPinsM2(void)
 {
     /* Enables the clock for GPIO0: Enables clock */
     CLOCK_EnableClock(kCLOCK_Gpio0);
+    CLOCK_EnableClock(kCLOCK_Gpio1);
     /* Enables the clock for GPIO3: Enables clock */
     CLOCK_EnableClock(kCLOCK_Gpio3);
     /* Enables the clock for PORT0 controller: Enables clock */
     CLOCK_EnableClock(kCLOCK_Port0);
+    CLOCK_EnableClock(kCLOCK_Port1);
     /* Enables the clock for PORT2: Enables clock */
     CLOCK_EnableClock(kCLOCK_Port2);
     /* Enables the clock for PORT3: Enables clock */
@@ -127,20 +129,20 @@ void BOARD_InitPinsM2(void)
         .pinDirection = kGPIO_DigitalOutput,
         .outputLogic = 0U
     };
-    /* Initialize GPIO functionality on pin PIO0_8 (pin C12)  */
+    /* Initialize GPIO functionality on pin PIO1_21 (pin C12)  */
     GPIO_PinInit(BOARD_INITPINSM2_WL_RST_GPIO, BOARD_INITPINSM2_WL_RST_PIN, &WL_RST_config);
 
     gpio_pin_config_t SDIO_RST_config = {
         .pinDirection = kGPIO_DigitalOutput,
         .outputLogic = 0U
     };
-    /* Initialize GPIO functionality on pin PIO3_5 (pin G14)  */
+    /* Initialize GPIO functionality on pin PIO1_22 (pin G14)  */
     GPIO_PinInit(BOARD_INITPINSM2_SDIO_RST_GPIO, BOARD_INITPINSM2_SDIO_RST_PIN, &SDIO_RST_config);
 
-    /* PORT0_8 (pin C12) is configured as PIO0_8 */
+    /* PORT1_21 (pin C12) is configured as PIO1_21 */
     PORT_SetPinMux(BOARD_INITPINSM2_WL_RST_PORT, BOARD_INITPINSM2_WL_RST_PIN, kPORT_MuxAlt0);
 
-    PORT0->PCR[8] = ((PORT0->PCR[8] &
+    PORT1->PCR[21] = ((PORT1->PCR[21] &
                       /* Mask bits to zero which are setting */
                       (~(PORT_PCR_IBE_MASK)))
 
@@ -210,7 +212,7 @@ void BOARD_InitPinsM2(void)
     /* PORT3_5 (pin G14) is configured as PIO3_5 */
     PORT_SetPinMux(BOARD_INITPINSM2_SDIO_RST_PORT, BOARD_INITPINSM2_SDIO_RST_PIN, kPORT_MuxAlt0);
 
-    PORT3->PCR[5] = ((PORT3->PCR[5] &
+    PORT1->PCR[22] = ((PORT1->PCR[22] &
                       /* Mask bits to zero which are setting */
                       (~(PORT_PCR_IBE_MASK)))
 
