@@ -2,20 +2,30 @@
 [<img src="https://mcuxpresso.nxp.com/static/icon/nxp-logo-color.svg" width="100"/>](https://www.nxp.com)
 
 ## WiFi CLI M2 FRDM MCXN947
-*The title should clearly indicate what the example code does. If the example is for an application note, then the document reference (e.g. AN12345) should be appended at the beginning.*
-
-This is an example of cli use with wifi on frdm-mcxn947
-
-*Description should provide a clear explanation of what the code is for, and provide links to any related documentation. If documentation is included in the Github repo then its location should be mentioned here, along with the name of documentation file(s). If the code is a snippet/general software, then a sufficient description must be provided for a developer to fully understand the example, either in this readme or in another document in the repo.*
-
-*If the code is an App SW pack then a link to the software summary page (SSP) on nxp.com must be provided.*
-
-*If the code is a demo, then a link to any related videos on nxp.com.Youtube, and/or other related pages must be provided.*
-
-*For training content you must reference the class training number (e.g. AMP-ENT-T4545), if available. You should also refer the reader to the training workbook and other materials from the class here.*
-
-*Ask yourself - if you were finding this code for the first time, is there enough information to make it useful? Think **QUALITY**.*
-
+This is an example of cli use with wifi running on serial terminal in frdm-mcxn947, this example has many test options for wifi.
+There are the options: 
+~~~
+-help  
+-wlan-version  
+-wlan-mac  
+-wlan-scan  
+-wlan-scan-opt ssid <ssid> bssid ...  
+-wlan-add <profile_name> ssid <ssid> bssid...  
+-wlan-remove <profile_name>  
+-wlan-list  
+-wlan-connect <profile_name>  
+-wlan-start-network <profile_name>  
+-wlan-stop-network  
+-wlan-disconnect  
+-wlan-stat  
+-wlan-info  
+-wlan-address  
+-wlan-get-uap-channel  
+-wlan-get-uap-sta-list  
+-ping [-s <packet_size>] [-c <packet_count>] [-W <timeout in sec>]<ip_address>  
+-iperf [-s|-c <host>|-a|-h] [options]  
+-dhcp-stat 
+~~~
 
 #### Boards: FRDM-MCXN947
 #### Categories: Wireless Connectivity, RTOS
@@ -109,7 +119,7 @@ This is an example of cli use with wifi on frdm-mcxn947
     #help wlan-version wlan-mac wlan-scan wlan-scan-opt wlan-add wlan-remove wlan-list
 
     #help
-
+    ~~~
     help
     wlan-version
     wlan-mac
@@ -130,6 +140,7 @@ This is an example of cli use with wifi on frdm-mcxn947
     ping [-s <packet_size>] [-c <packet_count>] [-W <timeout in sec>] <ip_address>
     iperf [-s|-c <host>|-a|-h] [options]
     dhcp-stat
+    ~~~
 
     #wlan - version
       WLAN Driver Version   : v1.3.r21.p1
@@ -143,6 +154,7 @@ This is an example of cli use with wifi on frdm-mcxn947
       Scan scheduled...
 
     # 3 networks found:
+     ~~~
       94:10:3E:02:60:F0  "nxp_mrvl" Infra
               channel: 1
               rssi: -25 dBm
@@ -158,6 +170,7 @@ This is an example of cli use with wifi on frdm-mcxn947
               rssi: -51 dBm
               security: WPA2
               WMM: YES
+      ~~~~
 
     #wlan - scan - opt
       Usage:
@@ -168,6 +181,7 @@ This is an example of cli use with wifi on frdm-mcxn947
       Scan for ssid "apple_g" scheduled...
 
     # 2 networks found:
+    ~~~~
       90:72:40:21:B3:1A  "apple_g" Infra
               channel: 11
               rssi: -52 dBm
@@ -178,8 +192,10 @@ This is an example of cli use with wifi on frdm-mcxn947
               rssi: -60 dBm
               security: WPA2
               WMM: YES
+    ~~~~
 
     #wlan - add
+    ~~~~
       Usage:
       For Station interface
         For DHCP IP Address assignment:
@@ -198,6 +214,7 @@ This is an example of cli use with wifi on frdm-mcxn947
           [channel <channelnumber>]
           [wpa2 <secret>]
       Error: invalid number of arguments
+    ~~~~
 
     #wlan - add abc ssid nxp_mrvl
       Added "abc"
@@ -209,10 +226,13 @@ This is an example of cli use with wifi on frdm-mcxn947
     #Connected to following BSS : SSID = [nxp_mrvl], IP = [192.168.10.152]
 
     #wlan - stat
+    ~~~
       Station connected (Active)
       uAP stopped
+    ~~~
 
     #wlan - info
+    ~~~
       Station connected to:
       "abc"
               SSID: nxp_mrvl
@@ -229,17 +249,19 @@ This is an example of cli use with wifi on frdm-mcxn947
                       dns1:           192.168.10.1
                       dns2:           0.0.0.0
       uAP not started
-
+    ~~~
     #
     #wlan - add abd ssid NXP_Soft_AP ip : 192.168.10.1, 192.168.10.1, 255.255.255.0 role uap wpa2 12345678
       Added "abd"
 
     #wlan - start - network abd
-
+    ~~~
       Soft AP "NXP_Soft_AP" Started successfully
       DHCP Server started successfully
+    ~~~
 
     #wlan - info
+    ~~~
       Station connected to:
       "abc"
               SSID: nxp_mrvl
@@ -270,14 +292,17 @@ This is an example of cli use with wifi on frdm-mcxn947
                       netmask:        255.255.255.0
                       dns1:           192.168.10.1
                       dns2:           0.0.0.0
-
+    ~~~
     #
     #wlan - disconnect
 
     #Dis - connected from : nxp_mrvl
+    ~~~
       [wlcm] Warn: got event: deauthentication
+    ~~~
 
     #wlan - info
+    ~~~
       Station not connected
       uAP started as:
       "abd"
@@ -294,10 +319,11 @@ This is an example of cli use with wifi on frdm-mcxn947
                       netmask:        255.255.255.0
                       dns1:           192.168.10.1
                       dns2:           0.0.0.0
-
+     ~~~
     #
 
     #wlan - list
+    ~~~
       2 networks:
       "abc"
               SSID: nxp_mrvl
@@ -319,13 +345,16 @@ This is an example of cli use with wifi on frdm-mcxn947
                       netmask:        255.255.255.0
                       dns1:           192.168.10.1
                       dns2:           0.0.0.0
-
+    ~~~
     #
 
     #wlan - remove abc
+    ~~~
       Removed "abc"
+    ~~~
 
     #wlan - list
+    ~~~
       1 network:
       "abd"
               SSID: NXP_Soft_AP
@@ -341,17 +370,21 @@ This is an example of cli use with wifi on frdm-mcxn947
                       netmask:        255.255.255.0
                       dns1:           192.168.10.1
                       dns2:           0.0.0.0
-
+    ~~~
     #
     #
 
     #wlan - address
+    ~~~
       not connected
+    ~~~
 
     #wlan - get
 
     #wlan - get - uap - channel
+    ~~~
       uAP channel: 0
+    ~~~
 
     #
 
@@ -360,10 +393,10 @@ This is an example of cli use with wifi on frdm-mcxn947
     No IP-MAC mapping stored
 
 ## 5. FAQs<a name="step5"></a>
-*Include FAQs here if appropriate. If there are none, then state "No FAQs have been identified for this project".*
+No FAQs have been identified for this project.
 
 ## 6. Support<a name="step6"></a>
-*Provide URLs for help here.*
+No URL
 
 #### Project Metadata
 <!----- Boards ----->
