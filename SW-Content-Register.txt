@@ -8,13 +8,4 @@ Origin:                 NXP (BSD-3-clause)
                         ARM CMSIS (Apache-2.0) - https://github.com/ARM-software/CMSIS_5/releases/tag/5.8.0
                         Amazon FreeRTOS (MIT) - https://github.com/FreeRTOS/FreeRTOS-Kernel
                         lwIP (BSD-3-Clause) - http://savannah.nongnu.org/projects/lwip
-
-wifi_tx_pwr_limits         Name: Wi-Fi module Tx power limits                
-                           Version: 1.0.0                                    
-                           Outgoing License: BSD-3-Clause                    
-                           License File: COPYING-BSD-3                       
-                           Format: source code                               
-                           Description: Wi-Fi module Tx power limits         
-                           Location: components/wifi_bt_module/Murata        
-                           Origin: Murata Manufacturing Co., Ltd.            
-                           (BSD-3-Clause)  
+                        wifi_tx_pwr_limits v1.0.0 Murata Manufacturing Co., LTD (BSD-3-clause)
