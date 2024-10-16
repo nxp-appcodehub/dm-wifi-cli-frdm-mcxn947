@@ -50,7 +50,7 @@ There are the options:
 - [FRDM MCXN947](https://www.nxp.com/design/design-center/development-boards-and-designs/general-purpose-mcus/frdm-development-board-for-mcx-n94-n54-mcus:FRDM-MCXN947)   
 [<img src="Images/MCXN947.jpg" width="300"/>](Images/MCXN947.jpg)
 - [FRDM-IW416-AW-AM510]()   
-[<img src="Images/FRDM-IW416-AW-AM510.jpg" width="300"/>](Images/FRDM-IW416-AW-AM510.jpg)
+[<img src="Images/FRDM-IW416-AW-AM510.png" width="200"/>](Images/FRDM-IW416-AW-AM510.png)
 
 ## 3. Setup<a name="step3"></a>
 
@@ -75,7 +75,8 @@ There are the options:
     - No flow control
 3.  Set jumpers of AW-AM510 module.   
   [<img src="Images/Jumpers.jpg" width="300"/>](Images/Jumpers.jpg)
-4.  Connect the Wi-Fi module.
+4.  Connect the Wi-Fi module.   
+  [<img src="Images/FRDM-MCXN947-AM510.png" width="300"/>](Images/FRDM-MCXN947-AM510.png)
 5.  Download the program to the target board.
 6.  Either press the reset button on your board or launch the debugger in your IDE to begin running the demo.
 
