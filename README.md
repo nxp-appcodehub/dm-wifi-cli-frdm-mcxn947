@@ -1,7 +1,7 @@
 # NXP Application Code Hub
 [<img src="https://mcuxpresso.nxp.com/static/icon/nxp-logo-color.svg" width="100"/>](https://www.nxp.com)
 
-## WiFi CLI M2 FRDM MCXN947
+## WiFi CLI Azure Wave AW-AM510 FRDM MCXN947
 This is an example of cli use with wifi running on serial terminal in frdm-mcxn947, this example has many test options for wifi.
 There are the options: 
 ~~~
@@ -47,10 +47,10 @@ There are the options:
 - [SDK for FRDM-MCXN947.](https://mcuxpresso.nxp.com/en/select)
 
 ## 2. Hardware<a name="step2"></a>
-- [FRDM-MCXN947.](https://www.nxp.com/products/processors-and-microcontrollers/arm-microcontrollers/general-purpose-mcus/mcx-arm-cortex-m/mcx-n94x-and-n54x-mcus-with-dual-core-arm-cortex-m33-eiq-neutron-npu-and-edgelock-secure-enclave-core-profile:MCX-N94X-N54X)
-- Personal computer
-- USB Type C cable
-- [WiFi module](https://www.embeddedartists.com/products/1xk-m-2-module/) 
+- [FRDM MCXN947](https://www.nxp.com/design/design-center/development-boards-and-designs/general-purpose-mcus/frdm-development-board-for-mcx-n94-n54-mcus:FRDM-MCXN947)   
+[<img src="Images/MCXN947.jpg" width="300"/>](Images/MCXN947.jpg)
+- [FRDM-IW416-AW-AM510]()   
+[<img src="Images/FRDM-IW416-AW-AM510.jpg" width="300"/>](Images/FRDM-IW416-AW-AM510.jpg)
 
 ## 3. Setup<a name="step3"></a>
 
@@ -73,9 +73,11 @@ There are the options:
     - No parity
     - One stop bit
     - No flow control
-3.  Connect the Wi-Fi module.
-4.  Download the program to the target board.
-5.  Either press the reset button on your board or launch the debugger in your IDE to begin running the demo.
+3.  Set jumpers of AW-AM510 module.   
+  [<img src="Images/Jumpers.jpg" width="300"/>](Images/Jumpers.jpg)
+4.  Connect the Wi-Fi module.
+5.  Download the program to the target board.
+6.  Either press the reset button on your board or launch the debugger in your IDE to begin running the demo.
 
 
 ## 4. Results<a name="step4"></a>
