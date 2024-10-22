@@ -1,5 +1,6 @@
 /*
  *  Copyright 2021-2023 NXP
+ *  All rights reserved.
  *
  *  SPDX-License-Identifier: BSD-3-Clause
  */
@@ -14,5 +15,3 @@
 #define WIFI_IW416_BOARD_MURATA_1XK_M2
 /* @END_TEST_ANCHOR */
 
-#include "wifi_bt_module_config.h"
-#include "wifi_config.h"

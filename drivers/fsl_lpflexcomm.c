@@ -1,5 +1,6 @@
 /*
  * Copyright 2022 NXP
+ * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -116,7 +117,7 @@ uint32_t LP_FLEXCOMM_GetInstance(void *base)
 
     for (i = 0U; i < (uint32_t)ARRAY_SIZE(s_lpflexcommBaseAddrs); i++)
     {
-        if (BaseAddr.u32 == s_lpflexcommBaseAddrs[i])
+        if (MSDK_REG_SECURE_ADDR(BaseAddr.u32) == MSDK_REG_SECURE_ADDR(s_lpflexcommBaseAddrs[i]))
         {
             break;
         }

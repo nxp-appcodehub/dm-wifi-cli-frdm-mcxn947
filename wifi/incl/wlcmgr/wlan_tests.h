@@ -1,22 +1,22 @@
-/*  Copyright 2008-2020 NXP
+/*  Copyright 2008-2020, 2024 NXP
  *
  *  SPDX-License-Identifier: BSD-3-Clause
  *
  */
 
 /*! \file wlan_tests.h
- *  \brief WLAN Connection Manager Tests
+ *  \brief This file provides interfaces for 802.11ax config test command.
  */
 
 #ifndef __WLAN_TESTS_H__
 #define __WLAN_TESTS_H__
 
-#ifdef CONFIG_11AX
+#if CONFIG_11AX
 /* index enum of cfgs */
 enum
 {
     TEST_WLAN_11AX_CFG,
-#ifdef CONFIG_11AX_TWT
+#if CONFIG_11AX_TWT
     TEST_WLAN_BCAST_TWT,
     TEST_WLAN_TWT_SETUP,
     TEST_WLAN_TWT_TEARDOWN,

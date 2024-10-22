@@ -2,28 +2,32 @@
  *
  *  @brief  This file provides WLAN Test API
  *
- *  Copyright 2008-2023 NXP
+ *  Copyright 2008-2024 NXP
  *
  *  SPDX-License-Identifier: BSD-3-Clause
  *
  */
 
 #include <string.h>
-#include <wm_os.h>
+#include <osa.h>
 #include <wm_net.h> /* for net_inet_aton */
 #include <wlan.h>
 #include <wifi.h>
 #include <wlan_tests.h>
 #include <wlan_11d.h>
-#ifdef CONFIG_WPS2
+#if CONFIG_WPS2
 #include <wifi_nxp_wps.h>
 #endif
-#ifdef CONFIG_WPA_SUPP_DPP
+#if CONFIG_WPA_SUPP_DPP
 #include "dpp.h"
 #endif
 
+#if CONFIG_MEM_POOLS
+#include <mem_pool_config.h>
+#endif
+
 #include <cli_utils.h>
-#ifdef CONFIG_ZEPHYR
+#ifdef __ZEPHYR__
 #include "wifi_shell.h"
 #else
 #include <cli.h>
@@ -33,49 +37,35 @@
  * NXP Test Framework (MTF) functions
  */
 
-#if defined(CONFIG_CSI) || defined(CONFIG_NET_MONITOR)
+#if (CONFIG_CSI) || (CONFIG_NET_MONITOR)
 static uint8_t broadcast_mac[MLAN_MAC_ADDR_LENGTH] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 #endif
 
-#ifdef CONFIG_CSI
-wlan_csi_config_params_t g_csi_params = {
-    .csi_enable         = 1,
-    .head_id            = 0x00010203,
-    .tail_id            = 0x00010203,
-    .csi_filter_cnt     = 0,
-    .chip_id            = 0xaa,
-    .band_config        = 0,
-    .channel            = 0,
-    .csi_monitor_enable = 0,
-    .ra4us              = 0,
-    /*				  mac_addr						  pkt_type	subtype  flags*/
-    //.csi_filter[0] = {0x00,0x00,0x00,0x00,0x00,0x00 , 0x00,     0x00,	 0}
-};
+#if CONFIG_CSI
+wlan_csi_config_params_t g_csi_params;
 #endif
 
-#ifdef CONFIG_NET_MONITOR
-wlan_net_monitor_t g_net_monitor_param = {
-    .action           = 0x01,
-    .monitor_activity = 0x01,
-    .filter_flags     = 0x07,
-    .radio_type       = 0x0,
-    .chan_number      = 0x01,
-};
+#if CONFIG_NET_MONITOR
+wlan_net_monitor_t g_net_monitor_param;
 #endif
 
-#ifdef CONFIG_HOST_SLEEP
+#if CONFIG_HOST_SLEEP
 extern uint64_t rtc_timeout;
 #endif
-#ifdef CONFIG_ZEPHYR
+#ifdef __ZEPHYR__
 extern char *net_sprint_addr(sa_family_t af, const void *addr);
+#endif
+
+#if defined(RW610)
+extern int wlan_send_hostcmd(const void *cmd_buf, uint32_t cmd_buf_len, void *host_resp_buf, uint32_t resp_buf_len, uint32_t *reqd_resp_len);
 #endif
 
 static void print_address(struct wlan_ip_config *addr, enum wlan_bss_role role)
 {
 // #if SDK_DEBUGCONSOLE != DEBUGCONSOLE_DISABLE
-#ifndef CONFIG_ZEPHYR
+#if defined(SDK_OS_FREE_RTOS)
     struct ip4_addr ip, gw, nm, dns1, dns2;
-#else
+#elif __ZEPHYR__
     struct in_addr ip, gw, nm;
 #endif
     char addr_type[10] = {0};
@@ -86,51 +76,61 @@ static void print_address(struct wlan_ip_config *addr, enum wlan_bss_role role)
     {
         goto out;
     }
-#ifndef CONFIG_ZEPHYR
+#if defined(SDK_OS_FREE_RTOS)
     ip.addr   = addr->ipv4.address;
     gw.addr   = addr->ipv4.gw;
     nm.addr   = addr->ipv4.netmask;
     dns1.addr = addr->ipv4.dns1;
     dns2.addr = addr->ipv4.dns2;
-#else
+#elif __ZEPHYR__
     ip.s_addr = addr->ipv4.address;
     gw.s_addr = addr->ipv4.gw;
     nm.s_addr = addr->ipv4.netmask;
 #endif
     if (addr->ipv4.addr_type == ADDR_TYPE_STATIC)
     {
-        (void)strncpy(addr_type, "STATIC", strlen("STATIC"));
+        (void)strcpy(addr_type, "STATIC");
     }
     else if (addr->ipv4.addr_type == ADDR_TYPE_STATIC)
     {
-        (void)strncpy(addr_type, "AUTO IP", strlen("AUTO IP"));
+        (void)strcpy(addr_type, "AUTO IP");
     }
     else
     {
-        (void)strncpy(addr_type, "DHCP", strlen("DHCP"));
+        (void)strcpy(addr_type, "DHCP");
     }
 
     (void)PRINTF("\r\n\tIPv4 Address\r\n");
     (void)PRINTF("\taddress: %s", addr_type);
-#ifndef CONFIG_ZEPHYR
+#if defined(SDK_OS_FREE_RTOS)
     (void)PRINTF("\r\n\t\tIP:\t\t%s", inet_ntoa(ip));
     (void)PRINTF("\r\n\t\tgateway:\t%s", inet_ntoa(gw));
     (void)PRINTF("\r\n\t\tnetmask:\t%s", inet_ntoa(nm));
     (void)PRINTF("\r\n\t\tdns1:\t\t%s", inet_ntoa(dns1));
     (void)PRINTF("\r\n\t\tdns2:\t\t%s", inet_ntoa(dns2));
-#else
+#elif defined(FSL_RTOS_THREADX)
+    (void)PRINTF("\r\n\t\tIP:\t\t%d.%d.%d.%d", (addr->ipv4.address >> 24), (addr->ipv4.address >> 16 & 0xFF),
+                 (addr->ipv4.address >> 8 & 0xFF), (addr->ipv4.address & 0xFF));
+    (void)PRINTF("\r\n\t\tgateway:\t%d.%d.%d.%d", (addr->ipv4.gw >> 24), (addr->ipv4.gw >> 16 & 0xFF),
+                 (addr->ipv4.gw >> 8 & 0xFF), (addr->ipv4.gw & 0xFF));
+    (void)PRINTF("\r\n\t\tnetmask:\t%d.%d.%d.%d", (addr->ipv4.netmask >> 24), (addr->ipv4.netmask >> 16 & 0xFF),
+                 (addr->ipv4.netmask >> 8 & 0xFF), (addr->ipv4.netmask & 0xFF));
+//    (void)PRINTF("\r\n\t\tdns1:\t\t%s", inet_ntoa(dns1));
+//    (void)PRINTF("\r\n\t\tdns2:\t\t%s", inet_ntoa(dns2));
+#elif __ZEPHYR__
     (void)PRINTF("\r\n\t\tIP:\t\t%s", net_sprint_addr(AF_INET, &ip));
     (void)PRINTF("\r\n\t\tgateway:\t%s", net_sprint_addr(AF_INET, &gw));
     (void)PRINTF("\r\n\t\tnetmask:\t%s", net_sprint_addr(AF_INET, &nm));
 #endif
     (void)PRINTF("\r\n");
 out:
-#ifdef CONFIG_IPV6
+
+#if CONFIG_IPV6
     if (role == WLAN_BSS_ROLE_STA || role == WLAN_BSS_ROLE_UAP)
     {
         int i;
         (void)PRINTF("\r\n\tIPv6 Addresses\r\n");
-#ifndef CONFIG_ZEPHYR
+#ifndef __ZEPHYR__
         for (i = 0; i < CONFIG_MAX_IPV6_ADDRESSES; i++)
         {
             if (addr->ipv6[i].addr_state != (unsigned char)IP6_ADDR_INVALID)
@@ -150,7 +150,6 @@ out:
     }
 #endif
     return;
-    // #endif
 }
 
 static const char *print_role(enum wlan_bss_role role)
@@ -181,7 +180,7 @@ inline static const char *sec_tag(struct wlan_network *network)
     }
     else
     {
-#ifdef CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE
+#if CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE
         if (is_ep_valid_security(network->security.type))
         {
             if (network->security.wpa3_sb_192)
@@ -192,6 +191,10 @@ inline static const char *sec_tag(struct wlan_network *network)
             {
                 return "\tsecurity: WPA3 SuiteB";
             }
+            else if (network->security.wpa3_ent)
+            {
+                return "\tsecurity: WPA3";
+            }
 
             return "\tsecurity: WPA2";
         }
@@ -199,12 +202,12 @@ inline static const char *sec_tag(struct wlan_network *network)
         return "\tsecurity";
     }
 }
-#ifdef CONFIG_WIFI_CAPA
+#if CONFIG_WIFI_CAPA
 static int get_capa(char *arg, uint8_t *wlan_capa)
 {
     if (!arg)
         return 1;
-#ifdef CONFIG_11AX
+#if CONFIG_11AX
     if (string_equal(arg, "11ax") != 0)
     {
         *wlan_capa = (WIFI_SUPPORT_11AX | WIFI_SUPPORT_11AC | WIFI_SUPPORT_11N | WIFI_SUPPORT_LEGACY);
@@ -212,7 +215,7 @@ static int get_capa(char *arg, uint8_t *wlan_capa)
     }
     else
 #endif
-#ifdef CONFIG_11AC
+#if CONFIG_11AC
         if (string_equal(arg, "11ac") != 0)
     {
         *wlan_capa = (WIFI_SUPPORT_11AC | WIFI_SUPPORT_11N | WIFI_SUPPORT_LEGACY);
@@ -242,37 +245,34 @@ static void print_network(struct wlan_network *network)
                  network->ssid[0] != '\0' ? network->ssid : "(hidden)");
     print_mac(network->bssid);
 
-    if ((network->dot11n != 0U)
-#ifdef CONFIG_11AC
-        || (network->dot11ac != 0U)
-#endif
-#ifdef CONFIG_11AX
-        || (network->dot11ax != 0U)
-#endif
-    )
+    (void)PRINTF("\r\n\tmode: ");
+#if CONFIG_11AC
+#if CONFIG_11AX
+    if (network->dot11ax != 0U)
     {
-        (void)PRINTF("\r\n\tmode: ");
-#ifdef CONFIG_11AC
-#ifdef CONFIG_11AX
-        if (network->dot11ax != 0U)
-        {
-            (void)PRINTF("802.11AX ");
-        }
-        else
+        (void)PRINTF("802.11AX ");
+    }
+    else
 #endif
-            if (network->dot11ac != 0U)
-        {
-            (void)PRINTF("802.11AC ");
-        }
-        else
+        if (network->dot11ac != 0U)
+    {
+        (void)PRINTF("802.11AC ");
+    }
+    else
 #endif
-            if (network->dot11n != 0U)
-        {
-            (void)PRINTF("802.11N ");
-        }
-        else
+        if (network->dot11n != 0U)
+    {
+        (void)PRINTF("802.11N ");
+    }
+    else
+    {
+        if (network->channel <= 14)
         {
             (void)PRINTF("802.11BG ");
+        }
+        else
+        {
+            (void)PRINTF("802.11A ");
         }
     }
 
@@ -306,7 +306,7 @@ static void print_network(struct wlan_network *network)
             (void)PRINTF("%s: WPA\r\n", sec_tag(network));
             break;
         case WLAN_SECURITY_WPA2:
-#if defined(CONFIG_11R)
+#if (CONFIG_11R)
             if (network->ft_psk == 1U)
             {
                 (void)PRINTF("%s: WPA2-FT-PSK", sec_tag(network));
@@ -318,7 +318,7 @@ static void print_network(struct wlan_network *network)
             }
             (void)PRINTF("\r\n");
             break;
-#ifdef CONFIG_11R
+#if CONFIG_11R
         case WLAN_SECURITY_WPA2_FT:
             (void)PRINTF("%s: WPA2-FT-PSK\r\n", sec_tag(network));
             break;
@@ -326,24 +326,24 @@ static void print_network(struct wlan_network *network)
         case WLAN_SECURITY_WPA_WPA2_MIXED:
             (void)PRINTF("%s: WPA/WPA2 Mixed\r\n", sec_tag(network));
             break;
-#if defined(CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE) || defined(CONFIG_WPA2_ENTP)
-#ifdef CONFIG_EAP_TLS
+#if (CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE) || (CONFIG_WPA2_ENTP)
+#if CONFIG_EAP_TLS
         case WLAN_SECURITY_EAP_TLS:
             (void)PRINTF("%s Enterprise EAP-TLS\r\n", sec_tag(network));
             break;
 #endif
 #endif
-#ifdef CONFIG_PEAP_MSCHAPV2
+#if CONFIG_PEAP_MSCHAPV2
         case WLAN_SECURITY_EAP_PEAP_MSCHAPV2:
             (void)PRINTF("%s: WPA2 Enterprise PEAP-MSCHAPV2\r\n", sec_tag(network));
             break;
 #endif
-#ifdef CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE
-#ifdef CONFIG_EAP_TLS
+#if CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE
+#if CONFIG_EAP_TLS
         case WLAN_SECURITY_EAP_TLS_SHA256:
             (void)PRINTF("%s Enterprise EAP-TLS-SHA256\r\n", sec_tag(network));
             break;
-#ifdef CONFIG_11R
+#if CONFIG_11R
         case WLAN_SECURITY_EAP_TLS_FT:
             (void)PRINTF("%s Enterprise EAP-TLS-FT\r\n", sec_tag(network));
             break;
@@ -352,68 +352,68 @@ static void print_network(struct wlan_network *network)
             break;
 #endif
 #endif
-#ifdef CONFIG_EAP_TTLS
+#if CONFIG_EAP_TTLS
         case WLAN_SECURITY_EAP_TTLS:
             (void)PRINTF("%s Enterprise EAP-TTLSv%d\r\n", sec_tag(network), network->security.eap_ver);
             break;
-#ifdef CONFIG_EAP_MSCHAPV2
+#if CONFIG_EAP_MSCHAPV2
         case WLAN_SECURITY_EAP_TTLS_MSCHAPV2:
             (void)PRINTF("%s Enterprise EAP-TTLSv%d-MSCHAPV2\r\n", sec_tag(network), network->security.eap_ver);
             break;
 #endif
 #endif
-#ifdef CONFIG_EAP_PEAP
-#ifdef CONFIG_EAP_MSCHAPV2
+#if CONFIG_EAP_PEAP
+#if CONFIG_EAP_MSCHAPV2
         case WLAN_SECURITY_EAP_PEAP_MSCHAPV2:
             (void)PRINTF("%s Enterprise EAP-PEAPv%d-MSCHAPV2\r\n", sec_tag(network), network->security.eap_ver);
             break;
 #endif
-#ifdef CONFIG_EAP_TLS
+#if CONFIG_EAP_TLS
         case WLAN_SECURITY_EAP_PEAP_TLS:
             (void)PRINTF("%s Enterprise EAP-PEAPv%d-TLS\r\n", sec_tag(network), network->security.eap_ver);
             break;
 #endif
-#ifdef CONFIG_EAP_GTC
+#if CONFIG_EAP_GTC
         case WLAN_SECURITY_EAP_PEAP_GTC:
             (void)PRINTF("%s Enterprise EAP-PEAPv%d-GTC\r\n", sec_tag(network), network->security.eap_ver);
             break;
 #endif
 #endif
-#ifdef CONFIG_EAP_FAST
-#ifdef CONFIG_EAP_MSCHAPV2
+#if CONFIG_EAP_FAST
+#if CONFIG_EAP_MSCHAPV2
         case WLAN_SECURITY_EAP_FAST_MSCHAPV2:
             (void)PRINTF("%s Enterprise EAP-FAST-MSCHAPV2\r\n", sec_tag(network));
             break;
 #endif
-#ifdef CONFIG_EAP_GTC
+#if CONFIG_EAP_GTC
         case WLAN_SECURITY_EAP_FAST_GTC:
             (void)PRINTF("%s Enterprise EAP-FAST-GTC\r\n", sec_tag(network));
             break;
 #endif
 #endif
-#ifdef CONFIG_EAP_SIM
+#if CONFIG_EAP_SIM
         case WLAN_SECURITY_EAP_SIM:
             (void)PRINTF("%s Enterprise EAP-SIM\r\n", sec_tag(network));
             break;
 #endif
-#ifdef CONFIG_EAP_AKA
+#if CONFIG_EAP_AKA
         case WLAN_SECURITY_EAP_AKA:
             (void)PRINTF("%s Enterprise EAP-AKA\r\n", sec_tag(network));
             break;
 #endif
-#ifdef CONFIG_EAP_AKA_PRIME
+#if CONFIG_EAP_AKA_PRIME
         case WLAN_SECURITY_EAP_AKA_PRIME:
             (void)PRINTF("%s Enterprise EAP-AKA-PRIME\r\n", sec_tag(network));
             break;
 #endif
 #endif
-#ifdef CONFIG_OWE
+#if CONFIG_DRIVER_OWE
         case WLAN_SECURITY_OWE_ONLY:
             (void)PRINTF("%s: OWE Only\r\n", sec_tag(network));
             break;
 #endif
         case WLAN_SECURITY_WPA3_SAE:
-#if defined(CONFIG_11R)
+#if (CONFIG_11R)
             if (network->ft_sae == 1U)
             {
                 (void)PRINTF("%s: WPA3-FT-SAE", sec_tag(network));
@@ -425,8 +425,11 @@ static void print_network(struct wlan_network *network)
             }
             (void)PRINTF("\r\n");
             break;
-#ifdef CONFIG_WPA_SUPP
-#ifdef CONFIG_11R
+        case WLAN_SECURITY_WPA3_SAE_EXT_KEY:
+            (void)PRINTF("%s: WPA3-SAE-EXT-KEY\r\n", sec_tag(network));
+            break;
+#if CONFIG_WPA_SUPP
+#if CONFIG_11R
         case WLAN_SECURITY_WPA3_FT_SAE:
             (void)PRINTF("%s: WPA3-FT-SAE\r\n", sec_tag(network));
             break;
@@ -435,34 +438,39 @@ static void print_network(struct wlan_network *network)
         case WLAN_SECURITY_WPA2_WPA3_SAE_MIXED:
             (void)PRINTF("%s: WPA2/WPA3 SAE Mixed\r\n", sec_tag(network));
             break;
+#if CONFIG_WPA_SUPP_DPP
+        case WLAN_SECURITY_DPP:
+            (void)PRINTF("%s: DPP\r\n", sec_tag(network));
+            break;
+#endif
         default:
             (void)PRINTF("\r\nUnexpected WLAN SECURITY\r\n");
             break;
     }
-#ifdef CONFIG_WIFI_CAPA
+#if CONFIG_WIFI_CAPA
     if (network->role == WLAN_BSS_ROLE_UAP)
     {
-#ifdef CONFIG_11AX
+#if CONFIG_11AX
         uint8_t enable_11ax = false;
 #endif
-#ifdef CONFIG_11AC
+#if CONFIG_11AC
         uint8_t enable_11ac = false;
 #endif
         uint8_t enable_11n = false;
 
-#ifdef CONFIG_11AX
+#if CONFIG_11AX
         enable_11ax = wlan_check_11ax_capa(network->channel);
 #endif
-#ifdef CONFIG_11AC
+#if CONFIG_11AC
         enable_11ac = wlan_check_11ac_capa(network->channel);
 #endif
         enable_11n = wlan_check_11n_capa(network->channel);
-#ifdef CONFIG_11AX
+#if CONFIG_11AX
         if (network->wlan_capa & WIFI_SUPPORT_11AX)
         {
             if (!enable_11ax)
             {
-#ifdef CONFIG_11AC
+#if CONFIG_11AC
                 if (enable_11ac)
                 {
                     (void)PRINTF("\twifi capability: 11ac\r\n");
@@ -482,7 +490,7 @@ static void print_network(struct wlan_network *network)
         }
         else
 #endif
-#ifdef CONFIG_11AC
+#if CONFIG_11AC
             if (network->wlan_capa & WIFI_SUPPORT_11AC)
         {
             if (!enable_11ac)
@@ -518,17 +526,16 @@ static void print_network(struct wlan_network *network)
         }
     }
 #endif
-#ifdef CONFIG_WPA_SUPP
+#if CONFIG_WPA_SUPP
     if (network->role == WLAN_BSS_ROLE_STA)
     {
         (void)PRINTF("\tProactive Key Caching: %s\r\n", network->security.pkc == 1 ? "Enabled" : "Disabled");
     }
 #endif
     print_address(&network->ip, network->role);
-#ifdef CONFIG_SCAN_WITH_RSSIFILTER
+#if CONFIG_SCAN_WITH_RSSIFILTER
     (void)PRINTF("\r\n\trssi threshold: %d \r\n", network->rssi_threshold);
 #endif
-    // #endif
 }
 
 /* Parse the 'arg' string as "ip:ipaddr,gwaddr,netmask,[dns1,dns2]" into
@@ -643,38 +650,45 @@ static void dump_wlan_add_usage(void)
     (void)PRINTF("  For DHCP IP Address assignment:\r\n");
     (void)PRINTF(
         "    wlan-add <profile_name> ssid <ssid> [wpa2 <psk/psk-sha256"
-#ifdef CONFIG_11R
+#if CONFIG_11R
         "/ft-psk"
 #endif
         "> <secret>] [mfpc <1> mfpr <0>] "
         "\r\n");
     (void)PRINTF("      If using WPA2 security, set the PMF configuration as mentioned above.\r\n");
-#ifdef CONFIG_WPA_SUPP
+#if CONFIG_WPA_SUPP
     (void)PRINTF(
         "If using proactive key caching set pkc as 1, to disable set to 0(default), if okc is set this is not "
         "used.\r\n");
     (void)PRINTF("If using specific ciphers, set the group, pairwise and group mgmt using gc, pc and gmc options.\r\n");
     (void)PRINTF(
         "supported ciphers: ccmp=0x10"
-#ifdef CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE
+#if CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE
         ", gcmp=0x40, gcmp_256=0x100, ccmp_256=0x200"
 #endif
         "\r\n");
     (void)PRINTF(
         "supported group mgmt ciphers: aes_128_cmac=0x20"
-#ifdef CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE
+#if CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE
         ", bip_gmac_128=0x800, bip_gmac_256=0x1000, "
         "bip_cmac_256=0x2000"
 #endif
         "\r\n");
-#ifdef CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE
+#if CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE
+#if CONFIG_EAP_MSCHAPV2
+    (void)PRINTF("      If using eap-ttls-mschapv2/eap-peap-mschapv2, "
+        "please specify whether use CA or not by setting 'use_ca <0/1>'\r\n");
+#endif
     (void)PRINTF(
-        "    wlan-add <profile_name> ssid <ssid> [wpa3-sb/wpa3-sb-192] ["
-#ifdef CONFIG_EAP_TLS
-        "eap-tls/eap-tls-sha256"
-#ifdef CONFIG_11R
+        "    wlan-add <profile_name> ssid <ssid> [wpa3-ent/wpa3-sb/wpa3-sb-192] ["
+#if CONFIG_EAP_TLS
+        "eap-tls"
+#if CONFIG_11R
         "/eap-tls-ft/eap-tls-ft-sha384"
 #endif
+#endif
+#if CONFIG_EAP_TLS
+        " [tls_cipher <ECC_P384/RSA_3K>]"
 #endif
         " id <identity> "
         "[key_passwd "
@@ -682,42 +696,46 @@ static void dump_wlan_add_usage(void)
         "<domain_suffix_match_string>]] "
         "[mfpc <1> mfpr <0/1>] [mc 0x10 uc 0x10 gc 0x20]"
         "\r\n");
-#ifdef CONFIG_EAP_TTLS
+#if CONFIG_EAP_TTLS
     (void)PRINTF(
-        "    wlan-add <profile_name> ssid <ssid> [wpa3-sb/wpa3-sb-192] [eap-ttls aid <anonymous identity> [key2_passwd "
+        "    wlan-add <profile_name> ssid <ssid> [wpa3-ent/wpa3-sb/wpa3-sb-192] [eap-ttls aid <anonymous identity> [key2_passwd "
         "<client_key2_passwd>]] [mfpc <1> mfpr <0/1>]"
         "\r\n");
-#ifdef CONFIG_EAP_MSCHAPV2
+#if CONFIG_EAP_MSCHAPV2
     (void)PRINTF(
-        "    wlan-add <profile_name> ssid <ssid> [wpa3-sb/wpa3-sb-192] [eap-ttls-mschapv2 aid <anonymous identity> id "
+        "    wlan-add <profile_name> ssid <ssid> [wpa3-ent/wpa3-sb/wpa3-sb-192] [eap-ttls-mschapv2 use_ca <0/1> aid <anonymous identity> id "
         "<identity> pass "
         "<password> [key_passwd <client_key_passwd>]] [mfpc <1> mfpr <0/1>]"
         "\r\n");
 #endif
 #endif
-#ifdef CONFIG_EAP_PEAP
+#if CONFIG_EAP_PEAP
     (void)PRINTF(
-        "    wlan-add <profile_name> ssid <ssid> [wpa3-sb/wpa3-sb-192] ["
-#ifdef CONFIG_EAP_MSCHAPV2
-        "eap-peap-mschapv2"
+        "    wlan-add <profile_name> ssid <ssid> [wpa3-ent/wpa3-sb/wpa3-sb-192] ["
+#if CONFIG_EAP_TLS
+        "eap-peap-tls"
 #endif
-#ifdef CONFIG_EAP_TLS
-        "/eap-peap-tls"
-#endif
-#ifdef CONFIG_EAP_GTC
+#if CONFIG_EAP_GTC
         "/eap-peap-gtc"
 #endif
         " [ver 0/1] id <identity> pass "
         "<password> [key_passwd <client_key_passwd>]] [mfpc <1> mfpr <0/1>]"
         "\r\n");
 #endif
-#ifdef CONFIG_EAP_FAST
+#if CONFIG_EAP_MSCHAPV2
     (void)PRINTF(
-        "    wlan-add <profile_name> ssid <ssid> [wpa3-sb/wpa3-sb-192] ["
-#ifdef CONFIG_EAP_MSCHAPV2
+        "    wlan-add <profile_name> ssid <ssid> [wpa3-ent/wpa3-sb/wpa3-sb-192] [eap-peap-mschapv2 use_ca <0/1>"
+        " [ver 0/1] id <identity> pass "
+        "<password> [key_passwd <client_key_passwd>]] [mfpc <1> mfpr <0/1>]"
+        "\r\n");
+#endif
+#if CONFIG_EAP_FAST
+    (void)PRINTF(
+        "    wlan-add <profile_name> ssid <ssid> [wpa3-ent/wpa3-sb/wpa3-sb-192] ["
+#if CONFIG_EAP_MSCHAPV2
         "eap-fast-mschapv2"
 #endif
-#ifdef CONFIG_EAP_GTC
+#if CONFIG_EAP_GTC
         "/eap-fast-gtc"
 #endif
         " aid <anonymous "
@@ -725,16 +743,16 @@ static void dump_wlan_add_usage(void)
         "<password> [key_passwd <client_key_passwd>]] [mfpc <1> mfpr <0/1>]"
         "\r\n");
 #endif
-#if defined(CONFIG_EAP_SIM) || defined(CONFIG_EAP_AKA) || defined(CONFIG_EAP_AKA_PRIME)
+#if (CONFIG_EAP_SIM) || (CONFIG_EAP_AKA) || (CONFIG_EAP_AKA_PRIME)
     (void)PRINTF(
         "    wlan-add <profile_name> ssid <ssid> ["
-#ifdef CONFIG_EAP_SIM
+#if CONFIG_EAP_SIM
         "eap-sim"
 #endif
-#ifdef CONFIG_EAP_AKA
+#if CONFIG_EAP_AKA
         "/eap-aka"
 #endif
-#ifdef CONFIG_EAP_AKA_PRIME
+#if CONFIG_EAP_AKA_PRIME
         "/eap-aka-prime"
 #endif
         " id <identity> pass <password>]"
@@ -743,25 +761,23 @@ static void dump_wlan_add_usage(void)
     (void)PRINTF("      If using WPA2/WPA3 Enterprise security, set the PMF configuration as required.\r\n");
 #endif
 #endif
-#ifdef CONFIG_OWE
+#if CONFIG_DRIVER_OWE
     (void)PRINTF(
         "    wlan-add <profile_name> ssid <ssid> <owe_only> "
-#ifdef CONFIG_WPA_SUPP
-        "[og <\"19 20 21\">] "
-#endif
         "mfpc 1 mfpr 1"
         "\r\n");
     (void)PRINTF("      If using OWE only security, always set the PMF configuration.\r\n");
+    (void)PRINTF("      NOTE: [og <\"19 20 21\">] is only supported in Micro-AP mode .\r\n");
 #endif
     (void)PRINTF(
         "    wlan-add <profile_name> ssid <ssid> [wpa3 sae"
-#ifdef CONFIG_WPA_SUPP
-#ifdef CONFIG_11R
+#if CONFIG_WPA_SUPP
+#if CONFIG_11R
         "/ft-sae"
 #endif
 #endif
         " <secret> "
-#ifdef CONFIG_WPA_SUPP
+#if CONFIG_WPA_SUPP
         "[sg <\"19 20 21\">] "
 #endif
         "[pwe <0/1/2>] mfpc <1> mfpr <0/1>]"
@@ -778,26 +794,26 @@ static void dump_wlan_add_usage(void)
     (void)PRINTF(
         "    [bssid <bssid>] [channel <channel number>]\r\n"
         "    [wpa2 <psk/psk-sha256"
-#ifdef CONFIG_11R
+#if CONFIG_11R
         "/ft-psk"
 #endif
         "> <secret>]"
-#if defined(CONFIG_WPA2_ENTP) || defined(CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE)
-        " [wpa3-sb/wpa3-sb-192] "
-#ifdef CONFIG_EAP_TLS
-        "[eap-tls/eap-tls-sha256"
-#ifdef CONFIG_11R
+#if (CONFIG_WPA2_ENTP) || (CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE)
+        " [wpa3-ent/wpa3-sb/wpa3-sb-192] "
+#if CONFIG_EAP_TLS
+        "[eap-tls"
+#if CONFIG_11R
         "/eap-tls-ft/eap-tls-ft-sha384"
 #endif
 #endif
         "]"
 #endif
-#ifdef CONFIG_OWE
+#if CONFIG_DRIVER_OWE
         " [owe_only]"
 #endif
         " [wpa3 sae"
-#ifdef CONFIG_WPA_SUPP
-#ifdef CONFIG_11R
+#if CONFIG_WPA_SUPP
+#if CONFIG_11R
         "/ft-sae"
 #endif
 #endif
@@ -814,97 +830,97 @@ static void dump_wlan_add_usage(void)
         "    [channel <channelnumber>]\r\n");
     (void)PRINTF(
         "    [wpa2 <psk/psk-sha256> <secret>] [wpa3 sae <secret> "
-#ifdef CONFIG_WPA_SUPP
+#if CONFIG_WPA_SUPP
         "[sg <\"19 20 21\">] "
 #endif
         "[pwe <0/1/2>] [tr <0/1"
-#ifdef CONFIG_WPA_SUPP
+#if CONFIG_WPA_SUPP
         "/2/4/8"
 #endif
         ">]]\r\n");
-#ifdef CONFIG_WPA_SUPP
-#ifdef CONFIG_HOSTAPD
-#ifdef CONFIG_11R
+#if CONFIG_WPA_SUPP
+#if CONFIG_HOSTAPD
+#if CONFIG_11R
     (void)PRINTF("    [ft-psk <secret>] [wpa3 ft-sae <secret>]\r\n");
 #endif
-#if defined(CONFIG_WPA2_ENTP) || defined(CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE)
+#if (CONFIG_WPA2_ENTP) || (CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE)
     (void)PRINTF(
-        "    [wpa3-sb/wpa3-sb-192] "
+        "    [wpa-ent/wpa3-sb/wpa3-sb-192] "
         "["
-#ifdef CONFIG_EAP_TLS
-        "eap-tls/eap-tls-sha256"
+#if CONFIG_EAP_TLS
+        "eap-tls"
 #endif
-#ifdef CONFIG_EAP_TTLS
+#if CONFIG_EAP_TTLS
         "/eap-ttls"
-#ifdef CONFIG_EAP_MSCHAPV2
+#if CONFIG_EAP_MSCHAPV2
         "/eap-ttls-mschapv2"
 #endif
 #endif
-#ifdef CONFIG_EAP_PEAP
-#ifdef CONFIG_EAP_MSCHAPV2
+#if CONFIG_EAP_PEAP
+#if CONFIG_EAP_MSCHAPV2
         "/eap-peap-mschapv2"
 #endif
-#ifdef CONFIG_EAP_TLS
+#if CONFIG_EAP_TLS
         "/eap-peap-tls"
 #endif
-#ifdef CONFIG_EAP_GTC
+#if CONFIG_EAP_GTC
         "/eap-peap-gtc"
 #endif
 #endif
-#ifdef CONFIG_EAP_FAST
-#ifdef CONFIG_EAP_MSCHAPV2
+#if CONFIG_EAP_FAST
+#if CONFIG_EAP_MSCHAPV2
         "/eap-fast-mschapv2"
 #endif
-#ifdef CONFIG_EAP_GTC
+#if CONFIG_EAP_GTC
         "/eap-fast-gtc"
 #endif
 #endif
-#ifdef CONFIG_EAP_SIM
+#if CONFIG_EAP_SIM
         "/eap-sim"
 #endif
-#ifdef CONFIG_EAP_AKA
+#if CONFIG_EAP_AKA
         "/eap-aka"
 #endif
-#ifdef CONFIG_EAP_AKA_PRIME
+#if CONFIG_EAP_AKA_PRIME
         "/eap-aka-prime"
 #endif
         "]\r\n");
-#ifdef CONFIG_11R
+#if CONFIG_11R
     (void)PRINTF("    [eap-tls-ft/eap-tls-ft-sha384]\r\n");
 #endif
 #endif
 #endif
 #endif
-#ifdef CONFIG_OWE
+#if CONFIG_DRIVER_OWE
     (void)PRINTF(
         "    [owe_only "
-#ifdef CONFIG_WPA_SUPP
+#if CONFIG_WPA_SUPP
         "[og <\"19 20 21\">]"
 #endif
         "]\r\n");
 #endif
     (void)PRINTF("    [mfpc <0/1>] [mfpr <0/1>]\r\n");
-#if defined(CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE)
-#if defined(CONFIG_EAP_SIM) || defined(CONFIG_EAP_AKA) || defined(CONFIG_EAP_AKA_PRIME)
+#if (CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE)
+#if (CONFIG_EAP_SIM) || (CONFIG_EAP_AKA) || (CONFIG_EAP_AKA_PRIME)
     (void)PRINTF(
         "    If using eap-sim/eap-aka/eap-aka-prime use read_gsm_triplets to add GSM authentication triplets and "
         "read_milenage to add Milenage keys and hlr_cli to start hlr_auc_gw\r\n");
 #endif
 #endif
-#ifdef CONFIG_WIFI_DTIM_PERIOD
+#if CONFIG_WIFI_DTIM_PERIOD
     (void)PRINTF("If setting dtim\r\n");
     (void)PRINTF("The value of dtim is an integer. The default value is 10.\r\n");
 #endif
-#ifdef CONFIG_11AC
+#if CONFIG_11AC
     (void)PRINTF(
         "Note: Setting the channel value greater than or equal to 36 is mandatory,\r\n"
         "      if UAP bandwidth is set to 80MHz.\r\n");
 #endif
-#ifdef CONFIG_WIFI_CAPA
+#if CONFIG_WIFI_CAPA
     (void)PRINTF("\r\n");
-#if defined CONFIG_11AX
+#if CONFIG_11AX
     (void)PRINTF("    [capa <11ax/11ac/11n/legacy>]\r\n");
-#elif defined CONFIG_11AC
+#elif CONFIG_11AC
     (void)PRINTF("    [capa <11ac/11n/legacy>]\r\n");
 #else
     (void)PRINTF("    [capa <11n/legacy>]\r\n");
@@ -932,20 +948,21 @@ static void test_wlan_add(int argc, char **argv)
         unsigned role : 1;
         unsigned mfpc : 1;
         unsigned mfpr : 1;
-#ifdef CONFIG_WPA_SUPP
+#if CONFIG_WPA_SUPP
         unsigned pkc : 1;
         unsigned gcipher : 1;
         unsigned pcipher : 1;
         unsigned gmcipher : 1;
 #endif
-#ifdef CONFIG_WIFI_DTIM_PERIOD
+#if CONFIG_WIFI_DTIM_PERIOD
         unsigned dtim : 1;
 #endif
-#ifdef CONFIG_WIFI_CAPA
+#if CONFIG_WIFI_CAPA
         unsigned wlan_capa : 1;
 #endif
-#ifdef CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE
+#if CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE
         unsigned wpa3_sb : 1;
+        unsigned wpa3_ent : 1;
 #endif
         unsigned acs_band : 1;
     } info;
@@ -970,6 +987,13 @@ static void test_wlan_add(int argc, char **argv)
     (void)memcpy(network.name, argv[arg], len);
     arg++;
     info.address = (uint8_t)ADDR_TYPE_DHCP;
+
+    /* To set default values for mfpc and mfpr following settings are  necessary.
+     * Later on in wlan_add_network these values will be compared to set default values (mfpc 1 and mfpr 0).
+     * If mfpc and mfpr values are mentioned via command line, those will be considered for non sae conditions */
+    network.security.mfpc = -1;
+    network.security.mfpr = -1;
+
     do
     {
         if ((info.ssid == 0U) && string_equal("ssid", argv[arg]))
@@ -1102,7 +1126,7 @@ static void test_wlan_add(int argc, char **argv)
                     network.security.key_mgmt |= WLAN_KEY_MGMT_PSK;
                     arg += 1;
 
-#ifdef CONFIG_11R
+#if CONFIG_11R
                     if (string_equal(argv[arg], "ft-psk") != false)
                     {
                         network.security.key_mgmt |= WLAN_KEY_MGMT_FT_PSK;
@@ -1121,7 +1145,7 @@ static void test_wlan_add(int argc, char **argv)
                     network.security.key_mgmt = WLAN_KEY_MGMT_PSK_SHA256;
                     arg += 1;
                 }
-#ifdef CONFIG_11R
+#if CONFIG_11R
                 else if (string_equal(argv[arg], "ft-psk") != false)
                 {
                     network.security.type     = WLAN_SECURITY_WPA2_FT;
@@ -1149,7 +1173,7 @@ static void test_wlan_add(int argc, char **argv)
             arg += 1;
             info.security2++;
         }
-#ifdef CONFIG_OWE
+#if CONFIG_DRIVER_OWE
         else if (!info.security && string_equal("owe_only", argv[arg]))
         {
             network.security.type = WLAN_SECURITY_OWE_ONLY;
@@ -1159,10 +1183,10 @@ static void test_wlan_add(int argc, char **argv)
             arg += 1;
             info.security++;
 
-#ifdef CONFIG_WPA_SUPP
+#if CONFIG_WPA_SUPP
             if (string_equal(argv[arg], "og") != false)
             {
-                network.security.owe_groups = argv[arg + 1];
+                network.security.owe_groups = string_dup(argv[arg + 1]);
                 arg += 2;
             }
 #endif
@@ -1170,11 +1194,12 @@ static void test_wlan_add(int argc, char **argv)
 #endif
         else if ((info.security3 == 0U) && string_equal("wpa3", argv[arg]))
         {
-            if ((string_equal(argv[arg + 1], "sae") != false) || (string_equal(argv[arg + 1], "ft-sae") != false))
+            if ((string_equal(argv[arg + 1], "sae") != false) || (string_equal(argv[arg + 1], "ft-sae") != false) ||
+                (string_equal(argv[arg + 1], "sae-ext-key") != false))
             {
                 arg += 1;
 
-#ifndef CONFIG_WPA_SUPP
+#if !CONFIG_WPA_SUPP
                 if (string_equal(argv[arg], "ft-sae") != false)
                 {
                     (void)PRINTF("Error: WPA3 FT-SAE not supported\r\n");
@@ -1188,9 +1213,14 @@ static void test_wlan_add(int argc, char **argv)
                     network.security.key_mgmt |= WLAN_KEY_MGMT_SAE;
                     arg += 1;
 
-#ifdef CONFIG_WPA_SUPP
-#ifdef CONFIG_11R
-                    if (string_equal(argv[arg], "ft-sae") != false)
+                    if (string_equal(argv[arg], "sae-ext-key") != false)
+                    {
+                        network.security.key_mgmt |= WLAN_KEY_MGMT_SAE_EXT_KEY;
+                        arg += 1;
+                    }
+#if CONFIG_WPA_SUPP
+#if CONFIG_11R
+                    else if (string_equal(argv[arg], "ft-sae") != false)
                     {
                         network.security.key_mgmt |= WLAN_KEY_MGMT_FT_SAE;
                         arg += 1;
@@ -1198,8 +1228,8 @@ static void test_wlan_add(int argc, char **argv)
 #endif
 #endif
                 }
-#ifdef CONFIG_WPA_SUPP
-#ifdef CONFIG_11R
+#if CONFIG_WPA_SUPP
+#if CONFIG_11R
                 else if (string_equal(argv[arg], "ft-sae") != false)
                 {
                     network.security.type = WLAN_SECURITY_WPA3_FT_SAE;
@@ -1214,6 +1244,18 @@ static void test_wlan_add(int argc, char **argv)
                 }
 #endif
 #endif
+                else if (string_equal(argv[arg], "sae-ext-key") != false)
+                {
+                    network.security.type = WLAN_SECURITY_WPA3_SAE_EXT_KEY;
+                    network.security.key_mgmt |= WLAN_KEY_MGMT_SAE_EXT_KEY;
+                    arg += 1;
+
+                    if (string_equal(argv[arg], "sae") != false)
+                    {
+                        network.security.key_mgmt |= WLAN_KEY_MGMT_SAE;
+                        arg += 1;
+                    }
+                }
                 /* copy the SAE password */
                 network.security.password_len = strlen(argv[arg]);
                 if (network.security.password_len == 0U)
@@ -1236,10 +1278,10 @@ static void test_wlan_add(int argc, char **argv)
                 }
                 arg += 1;
 
-#ifdef CONFIG_WPA_SUPP
+#if CONFIG_WPA_SUPP
                 if (string_equal(argv[arg], "sg") != false)
                 {
-                    network.security.sae_groups = argv[arg + 1];
+                    network.security.sae_groups = string_dup(argv[arg + 1]);
                     arg += 2;
                 }
 #endif
@@ -1274,7 +1316,7 @@ static void test_wlan_add(int argc, char **argv)
                         }
                         if (arg + 1 >= argc ||
                             (network.security.transition_disable != 0 && network.security.transition_disable != 1
-#ifdef CONFIG_WPA_SUPP
+#if CONFIG_WPA_SUPP
                              && network.security.transition_disable != 2 && network.security.transition_disable != 4 &&
                              network.security.transition_disable != 8
 #endif
@@ -1288,6 +1330,13 @@ static void test_wlan_add(int argc, char **argv)
                         arg += 2;
                     }
                 }
+                else
+                {
+                    if (network.role == WLAN_BSS_ROLE_STA)
+                    {
+                        network.security.pwe_derivation = 2;
+                    }
+                }
             }
             else
             {
@@ -1298,7 +1347,13 @@ static void test_wlan_add(int argc, char **argv)
             }
             info.security3++;
         }
-#ifdef CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE
+#if CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE
+        else if ((info.wpa3_ent == 0U) && string_equal("wpa3-ent", argv[arg]))
+        {
+            network.security.wpa3_ent = 1;
+            arg += 1;
+            info.wpa3_ent = 1;
+        }
         else if ((info.wpa3_sb == 0U) && string_equal("wpa3-sb", argv[arg]))
         {
             network.security.wpa3_sb = 1;
@@ -1313,49 +1368,49 @@ static void test_wlan_add(int argc, char **argv)
         }
         else if ((info.security2 == 0U) &&
                  (
-#ifdef CONFIG_EAP_TLS
+#if CONFIG_EAP_TLS
                      string_equal("eap-tls", argv[arg]) || string_equal("eap-tls-sha256", argv[arg]) ||
-#ifdef CONFIG_11R
+#if CONFIG_11R
                      string_equal("eap-tls-ft", argv[arg]) || string_equal("eap-tls-ft-sha384", argv[arg]) ||
 #endif
 #endif
-#ifdef CONFIG_EAP_TTLS
+#if CONFIG_EAP_TTLS
                      string_equal("eap-ttls", argv[arg]) ||
-#ifdef CONFIG_EAP_MSCHAPV2
+#if CONFIG_EAP_MSCHAPV2
                      string_equal("eap-ttls-mschapv2", argv[arg]) ||
 #endif
 #endif
-#ifdef CONFIG_EAP_PEAP
-#ifdef CONFIG_EAP_MSCHAPV2
+#if CONFIG_EAP_PEAP
+#if CONFIG_EAP_MSCHAPV2
                      string_equal("eap-peap-mschapv2", argv[arg]) ||
 #endif
-#ifdef CONFIG_EAP_TLS
+#if CONFIG_EAP_TLS
                      string_equal("eap-peap-tls", argv[arg]) ||
 #endif
-#ifdef CONFIG_EAP_GTC
+#if CONFIG_EAP_GTC
                      string_equal("eap-peap-gtc", argv[arg]) ||
 #endif
 #endif
-#ifdef CONFIG_EAP_FAST
-#ifdef CONFIG_EAP_MSCHAPV2
+#if CONFIG_EAP_FAST
+#if CONFIG_EAP_MSCHAPV2
                      string_equal("eap-fast-mschapv2", argv[arg]) ||
 #endif
-#ifdef CONFIG_EAP_GTC
+#if CONFIG_EAP_GTC
                      string_equal("eap-fast-gtc", argv[arg]) ||
 #endif
 #endif
-#ifdef CONFIG_EAP_SIM
+#if CONFIG_EAP_SIM
                      string_equal("eap-sim", argv[arg]) ||
 #endif
-#ifdef CONFIG_EAP_AKA
+#if CONFIG_EAP_AKA
                      string_equal("eap-aka", argv[arg]) ||
 #endif
-#ifdef CONFIG_EAP_AKA_PRIME
+#if CONFIG_EAP_AKA_PRIME
                      string_equal("eap-aka-prime", argv[arg]) ||
 #endif
                      false))
         {
-#ifdef CONFIG_EAP_TLS
+#if CONFIG_EAP_TLS
             if (string_equal("eap-tls", argv[arg]))
             {
                 network.security.type = WLAN_SECURITY_EAP_TLS;
@@ -1364,7 +1419,7 @@ static void test_wlan_add(int argc, char **argv)
             {
                 network.security.type = WLAN_SECURITY_EAP_TLS_SHA256;
             }
-#ifdef CONFIG_11R
+#if CONFIG_11R
             if (string_equal("eap-tls-ft", argv[arg]))
             {
                 network.security.type = WLAN_SECURITY_EAP_TLS_FT;
@@ -1375,72 +1430,86 @@ static void test_wlan_add(int argc, char **argv)
             }
 #endif
 #endif
-#ifdef CONFIG_EAP_TTLS
+#if CONFIG_EAP_TTLS
             if (string_equal("eap-ttls", argv[arg]))
             {
                 network.security.type = WLAN_SECURITY_EAP_TTLS;
             }
-#ifdef CONFIG_EAP_MSCHAPV2
+#if CONFIG_EAP_MSCHAPV2
             if (string_equal("eap-ttls-mschapv2", argv[arg]))
             {
                 network.security.type = WLAN_SECURITY_EAP_TTLS_MSCHAPV2;
             }
 #endif
 #endif
-#ifdef CONFIG_EAP_PEAP
-#ifdef CONFIG_EAP_MSCHAPV2
+#if CONFIG_EAP_PEAP
+#if CONFIG_EAP_MSCHAPV2
             if (string_equal("eap-peap-mschapv2", argv[arg]))
             {
                 network.security.type = WLAN_SECURITY_EAP_PEAP_MSCHAPV2;
             }
 #endif
-#ifdef CONFIG_EAP_TLS
+#if CONFIG_EAP_TLS
             if (string_equal("eap-peap-tls", argv[arg]))
             {
                 network.security.type = WLAN_SECURITY_EAP_PEAP_TLS;
             }
 #endif
-#ifdef CONFIG_EAP_GTC
+#if CONFIG_EAP_GTC
             if (string_equal("eap-peap-gtc", argv[arg]))
             {
                 network.security.type = WLAN_SECURITY_EAP_PEAP_GTC;
             }
 #endif
 #endif
-#ifdef CONFIG_EAP_FAST
-#ifdef CONFIG_EAP_MSCHAPV2
+#if CONFIG_EAP_FAST
+#if CONFIG_EAP_MSCHAPV2
             if (string_equal("eap-fast-mschapv2", argv[arg]))
             {
                 network.security.type = WLAN_SECURITY_EAP_FAST_MSCHAPV2;
             }
 #endif
-#ifdef CONFIG_EAP_GTC
+#if CONFIG_EAP_GTC
             if (string_equal("eap-fast-gtc", argv[arg]))
             {
                 network.security.type = WLAN_SECURITY_EAP_FAST_GTC;
             }
 #endif
 #endif
-#ifdef CONFIG_EAP_SIM
+#if CONFIG_EAP_SIM
             if (string_equal("eap-sim", argv[arg]))
             {
                 network.security.type = WLAN_SECURITY_EAP_SIM;
             }
 #endif
-#ifdef CONFIG_EAP_AKA
+#if CONFIG_EAP_AKA
             if (string_equal("eap-aka", argv[arg]))
             {
                 network.security.type = WLAN_SECURITY_EAP_AKA;
             }
 #endif
-#ifdef CONFIG_EAP_AKA_PRIME
+#if CONFIG_EAP_AKA_PRIME
             if (string_equal("eap-aka-prime", argv[arg]))
             {
                 network.security.type = WLAN_SECURITY_EAP_AKA_PRIME;
             }
 #endif
 
-#ifdef CONFIG_EAP_PEAP
+#if CONFIG_EAP_MSCHAPV2
+            network.security.verify_peer = 0;
+            if (string_equal(argv[arg + 1], "use_ca") != false)
+            {
+                unsigned int value;
+                if ((arg + 1 >= argc) || get_uint(argv[arg + 2], &value, strlen(argv[arg + 2])) || (value != 0 && value != 1))
+                {
+                    (void)PRINTF("Error: invalid use_ca parameter, please specify 0 or 1\r\n");
+                    return;
+                }
+                network.security.verify_peer = value;
+                arg += 2;
+            }
+#endif
+#if CONFIG_EAP_PEAP
             network.security.eap_ver = 1;
             if (string_equal(argv[arg + 1], "ver") != false)
             {
@@ -1501,7 +1570,7 @@ static void test_wlan_add(int argc, char **argv)
                 arg += 2;
             }
 #endif
-#if defined(CONFIG_EAP_SIM) || defined(CONFIG_EAP_AKA) || defined(CONFIG_EAP_AKA_PRIME)
+#if (CONFIG_EAP_SIM) || (CONFIG_EAP_AKA) || (CONFIG_EAP_AKA_PRIME)
             network.security.eap_result_ind = 1;
             if (string_equal(argv[arg + 1], "result_ind") != false)
             {
@@ -1522,9 +1591,29 @@ static void test_wlan_add(int argc, char **argv)
                 arg += 2;
             }
 #endif
+#if CONFIG_EAP_TLS
+            if ((string_equal(argv[arg + 1], "tls_cipher") != false) && network.security.wpa3_sb_192 &&
+                (network.security.type == WLAN_SECURITY_EAP_TLS))
+            {
+                if (string_equal(argv[arg + 2], "ECC_P384") != false)
+                {
+                    network.security.tls_cipher = EAP_TLS_ECC_P384;
+                }
+                else if (string_equal(argv[arg + 2], "RSA_3K") != false)
+                {
+                    network.security.tls_cipher = EAP_TLS_RSA_3K;
+                }
+                arg += 2;
+            }
+#endif
             if (string_equal(argv[arg + 1], "aid") != false)
             {
                 /* Set Client Anonymous Identity */
+                if (strlen(argv[arg + 2]) > IDENTITY_MAX_LENGTH)
+                {
+                    (void)PRINTF("Error: Aid name exceeded the max length %d\r\n", IDENTITY_MAX_LENGTH);
+                    return;
+                }
                 strcpy(network.security.anonymous_identity, argv[arg + 2]);
                 arg += 2;
             }
@@ -1532,8 +1621,14 @@ static void test_wlan_add(int argc, char **argv)
             while (string_equal(argv[arg + 1], "id") != false)
             {
                 /* For Station Set Client Identity */
+                if (strlen(argv[arg + 2]) > IDENTITY_MAX_LENGTH)
+                {
+                    (void)PRINTF("Error: id exceeded the max length %d\r\n", IDENTITY_MAX_LENGTH);
+                    return;
+                }
+
                 strcpy(network.security.identity, argv[arg + 2]);
-#ifdef CONFIG_WPA_SUPP_CRYPTO_AP_ENTERPRISE
+#if CONFIG_WPA_SUPP_CRYPTO_AP_ENTERPRISE
                 /* For uAP Set External Client Identity */
                 strcpy(network.security.identities[network.security.nusers], argv[arg + 2]);
 #endif
@@ -1543,34 +1638,51 @@ static void test_wlan_add(int argc, char **argv)
                 if (string_equal(argv[arg + 1], "pass") != false)
                 {
                     /* Set Client Password */
+                    if (strlen(argv[arg + 2]) > PASSWORD_MAX_LENGTH)
+                    {
+                        (void)PRINTF("Error: passwd exceeded the max length %d\r\n", PASSWORD_MAX_LENGTH);
+                        return;
+                    }
+
                     strcpy(network.security.eap_password, argv[arg + 2]);
-#ifdef CONFIG_WPA_SUPP_CRYPTO_AP_ENTERPRISE
+#if CONFIG_WPA_SUPP_CRYPTO_AP_ENTERPRISE
                     /* For uAP Set External Client Identity */
                     strcpy(network.security.passwords[network.security.nusers], argv[arg + 2]);
 #endif
                     arg += 2;
                 }
-#ifdef CONFIG_WPA_SUPP_CRYPTO_AP_ENTERPRISE
+#if CONFIG_WPA_SUPP_CRYPTO_AP_ENTERPRISE
                 network.security.nusers += 1;
 #endif
             }
 
             if (string_equal(argv[arg + 1], "key_passwd") != false)
             {
+                if (strlen(argv[arg + 2]) > PASSWORD_MAX_LENGTH)
+                {
+                    (void)PRINTF("Error: key_passwd exceeded the maximum length %d\n", PASSWORD_MAX_LENGTH);
+                    return;
+                }
                 /* Set Client/Server Key password */
                 strcpy(network.security.client_key_passwd, argv[arg + 2]);
-#ifdef CONFIG_WPA_SUPP_CRYPTO_AP_ENTERPRISE
+#if CONFIG_WPA_SUPP_CRYPTO_AP_ENTERPRISE
                 strcpy(network.security.server_key_passwd, argv[arg + 2]);
 #endif
                 arg += 2;
             }
 
-#ifdef CONFIG_WPA_SUPP_CRYPTO_AP_ENTERPRISE
+#if CONFIG_WPA_SUPP_CRYPTO_AP_ENTERPRISE
 
-#ifdef CONFIG_EAP_FAST
+#if CONFIG_EAP_FAST
             if (string_equal(argv[arg + 1], "pac_opa_enc_key") != false)
             {
                 /* Encryption key for EAP-FAST PAC-Opaque values. */
+                if (strlen(argv[arg + 2]) > PAC_OPAQUE_ENCR_KEY_MAX_LENGTH)
+                {
+                    (void)PRINTF("Error: pac_opa_enc_key exceeded the maximum length %d.\r\n",
+                                 PAC_OPAQUE_ENCR_KEY_MAX_LENGTH);
+                    return;
+                }
                 strcpy(network.security.pac_opaque_encr_key, argv[arg + 2]);
                 arg += 2;
             }
@@ -1578,6 +1690,11 @@ static void test_wlan_add(int argc, char **argv)
             if (string_equal(argv[arg + 1], "a_id") != false)
             {
                 /* EAP-FAST authority identity (A-ID) */
+                if (strlen(argv[arg + 2]) > A_ID_MAX_LENGTH)
+                {
+                    (void)PRINTF("Error: a_id exceeded the maximum length %d\r\n", A_ID_MAX_LENGTH);
+                    return;
+                }
                 strcpy(network.security.a_id, argv[arg + 2]);
                 arg += 2;
             }
@@ -1607,6 +1724,12 @@ static void test_wlan_add(int argc, char **argv)
             if (string_equal(argv[arg + 1], "hash") != false)
             {
                 /* CA Cert hash */
+                if (strlen(argv[arg + 2]) > HASH_MAX_LENGTH)
+                {
+                    (void)PRINTF("Error: hash exceeded the maximum length %d\r\n", HASH_MAX_LENGTH);
+                    return;
+                }
+
                 strcpy(network.security.ca_cert_hash, argv[arg + 2]);
                 arg += 2;
             }
@@ -1614,6 +1737,12 @@ static void test_wlan_add(int argc, char **argv)
             if (string_equal(argv[arg + 1], "domain_match") != false)
             {
                 /* Domain match */
+                if (strlen(argv[arg + 2]) > DOMAIN_MATCH_MAX_LENGTH)
+                {
+                    (void)PRINTF("Error: domain_match exceeded the maximum length %d\r\n", DOMAIN_MATCH_MAX_LENGTH);
+                    return;
+                }
+
                 strcpy(network.security.domain_match, argv[arg + 2]);
                 arg += 2;
             }
@@ -1621,6 +1750,12 @@ static void test_wlan_add(int argc, char **argv)
             if (string_equal(argv[arg + 1], "domain_suffix_match") != false)
             {
                 /* Domain match */
+                if (strlen(argv[arg + 2]) > DOMAIN_MATCH_MAX_LENGTH)
+                {
+                    (void)PRINTF("Error: domain_suffix_match exceeded the maximum length %d\r\n",
+                                 DOMAIN_MATCH_MAX_LENGTH);
+                    return;
+                }
                 strcpy(network.security.domain_suffix_match, argv[arg + 2]);
                 arg += 2;
             }
@@ -1628,11 +1763,11 @@ static void test_wlan_add(int argc, char **argv)
             info.security2++;
             arg += 1;
         }
-#else /* CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE */
-#ifdef CONFIG_WPA2_ENTP
+#else  /* CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE */
+#if CONFIG_WPA2_ENTP
         else if (!info.security2 && string_equal("eap-tls", argv[arg]))
         {
-            u8_t *data   = NULL;
+            t_u8 *data   = NULL;
             int data_len = 0;
 
             network.security.type = WLAN_SECURITY_EAP_TLS;
@@ -1673,7 +1808,7 @@ static void test_wlan_add(int argc, char **argv)
             wlan_free_entp_cert_files();
         }
 #endif /* CONFIG_WPA2_ENTP */
-#ifdef CONFIG_PEAP_MSCHAPV2
+#if CONFIG_PEAP_MSCHAPV2
         else if (!info.security2 && string_equal("peap", argv[arg]))
         {
             /* Specify address type as DHCP */
@@ -1762,7 +1897,7 @@ static void test_wlan_add(int argc, char **argv)
             info.address = (uint8_t)ADDR_TYPE_LLA;
             arg++;
         }
-#ifdef CONFIG_WPA_SUPP
+#if CONFIG_WPA_SUPP
         else if (!info.pkc && string_equal("pkc", argv[arg]))
         {
             unsigned short pkc;
@@ -1828,7 +1963,7 @@ static void test_wlan_add(int argc, char **argv)
             info.gmcipher = 1;
         }
 #endif
-#ifdef CONFIG_WIFI_DTIM_PERIOD
+#if CONFIG_WIFI_DTIM_PERIOD
         else if (!info.dtim && string_equal("dtim", argv[arg]))
         {
             unsigned int dtim_period;
@@ -1844,7 +1979,7 @@ static void test_wlan_add(int argc, char **argv)
             info.dtim = 1;
         }
 #endif
-#ifdef CONFIG_WIFI_CAPA
+#if CONFIG_WIFI_CAPA
         else if (!info.wlan_capa && network.role == WLAN_BSS_ROLE_UAP && string_equal("capa", argv[arg]))
         {
             if (arg + 1 >= argc || get_capa(argv[arg + 1], &network.wlan_capa))
@@ -1909,6 +2044,13 @@ static void test_wlan_add(int argc, char **argv)
         }
     }
 
+    if (info.role == WLAN_BSS_ROLE_UAP && network.ip.ipv4.address == 0)
+    {
+        (void)PRINTF("No IP address assigned for uAP. This is only for bridge mode.\r\n");
+        info.address = ADDR_TYPE_BRIDGE_MODE;
+        network.ip.ipv4.addr_type = ADDR_TYPE_BRIDGE_MODE;
+    }
+
     network.ip.ipv4.addr_type         = (enum address_types)(info.address);
     network.ssid[IEEEtypes_SSID_SIZE] = '\0';
     ret                               = wlan_add_network(&network);
@@ -1934,7 +2076,7 @@ static void test_wlan_add(int argc, char **argv)
     }
 }
 
-#ifdef CONFIG_WPA_SUPP_WPS
+#if CONFIG_WPA_SUPP_WPS
 /** Enum that indicates type of WPS session
  *   either a push button or a PIN based session is
  *   determined by value fo this enum
@@ -1984,8 +2126,8 @@ static int __scan_cb(unsigned int count)
             (void)PRINTF(" (hidden) %s\r\n", print_role(res.role));
         }
         (void)PRINTF("\tmode: ");
-#ifdef CONFIG_11AC
-#ifdef CONFIG_11AX
+#if CONFIG_11AC
+#if CONFIG_11AX
         if (res.dot11ax != 0U)
         {
             (void)PRINTF("802.11AX ");
@@ -2004,7 +2146,14 @@ static int __scan_cb(unsigned int count)
         }
         else
         {
-            (void)PRINTF("802.11BG ");
+            if (res.channel <= 14)
+            {
+                (void)PRINTF("802.11BG ");
+            }
+            else
+            {
+                (void)PRINTF("802.11A ");
+            }
         }
         (void)PRINTF("\r\n");
 
@@ -2041,7 +2190,7 @@ static int __scan_cb(unsigned int count)
             {
                 (void)PRINTF("WPA3-SAE ");
             }
-#ifdef CONFIG_OWE
+#if CONFIG_DRIVER_OWE
             if (res.owe != 0U)
             {
                 (void)PRINTF("OWE Only");
@@ -2051,20 +2200,20 @@ static int __scan_cb(unsigned int count)
             {
                 (void)PRINTF("WPA2 Enterprise ");
             }
-            if (res.wpa2_entp_sha256 != 0U)
+            if (res.wpa3_entp != 0U)
             {
-                (void)PRINTF("WPA2-SHA256 Enterprise ");
+                (void)PRINTF("WPA3 Enterprise ");
             }
             if (res.wpa3_1x_sha256 != 0U)
             {
-                (void)PRINTF("WPA3-SHA256 Enterprise ");
+                (void)PRINTF("WPA3 Enterprise SuiteB");
             }
             if (res.wpa3_1x_sha384 != 0U)
             {
-                (void)PRINTF("WPA3-SHA384 Enterprise ");
+                (void)PRINTF("WPA3 Enterprise SuiteB-192");
             }
         }
-#if defined(CONFIG_11R)
+#if (CONFIG_11R)
         if (res.ft_1x != 0U)
         {
             (void)PRINTF("with FT_802.1x");
@@ -2084,10 +2233,10 @@ static int __scan_cb(unsigned int count)
 #endif
         if (!((res.wep != 0U) || (res.wpa != 0U) || (res.wpa2 != 0U) || (res.wpa3_sae != 0U) || (res.wpa2_entp != 0U) ||
               (res.wpa2_sha256 != 0U) ||
-#ifdef CONFIG_OWE
+#if CONFIG_DRIVER_OWE
               (res.owe != 0U) ||
 #endif
-              (res.wpa2_entp_sha256 != 0U) || (res.wpa3_1x_sha256 != 0U) || (res.wpa3_1x_sha384 != 0U)))
+              (res.wpa3_entp != 0U) || (res.wpa3_1x_sha256 != 0U) || (res.wpa3_1x_sha384 != 0U)))
         {
             (void)PRINTF("OPEN ");
         }
@@ -2095,13 +2244,13 @@ static int __scan_cb(unsigned int count)
 
         (void)PRINTF("\tWMM: %s\r\n", (res.wmm != 0U) ? "YES" : "NO");
 
-#ifdef CONFIG_11K
+#if CONFIG_11K
         if (res.neighbor_report_supported == true)
         {
             (void)PRINTF("\t802.11K: YES\r\n");
         }
 #endif
-#ifdef CONFIG_11V
+#if CONFIG_11V
         if (res.bss_transition_supported == true)
         {
             (void)PRINTF("\t802.11V: YES\r\n");
@@ -2119,7 +2268,7 @@ static int __scan_cb(unsigned int count)
         {
             (void)PRINTF("\t802.11W: NA\r\n");
         }
-#ifdef CONFIG_WPA_SUPP_WPS
+#if CONFIG_WPA_SUPP_WPS
         if (res.wps)
         {
             if (res.wps_session == WPS_SESSION_PBC)
@@ -2132,7 +2281,7 @@ static int __scan_cb(unsigned int count)
         else
             (void)PRINTF("\tWPS: %s \r\n", "NO");
 #endif
-#ifdef CONFIG_OWE
+#if CONFIG_DRIVER_OWE
         if (res.trans_ssid_len != 0U)
         {
             (void)PRINTF("\tOWE BSSID: ");
@@ -2145,19 +2294,21 @@ static int __scan_cb(unsigned int count)
         }
 #endif
     }
-
+#if CONFIG_WIFI_SMOKE_TESTS
+    PRINTF("SCAN COMPLETED !\r\n");
+#endif
     return 0;
 }
 
 static void test_wlan_thread_info(int argc, char **argv)
 {
     /* TODO: implement for Zephyr */
-#ifndef CONFIG_ZEPHYR
-    os_dump_threadinfo(NULL);
+#ifndef __ZEPHYR__
+    OSA_DumpThreadInfo(NULL);
 #endif
 }
 
-#ifdef CONFIG_SCHED_SWITCH_TRACE
+#if CONFIG_SCHED_SWITCH_TRACE
 static void test_wlan_sched_switch_debug(int argc, char **argv)
 {
     if (strncmp(argv[1], "start", strlen("start") + 1))
@@ -2169,10 +2320,12 @@ static void test_wlan_sched_switch_debug(int argc, char **argv)
 }
 #endif
 
+#if LWIP_STATS_DISPLAY
 static void test_wlan_net_stats(int argc, char **argv)
 {
     net_stat();
 }
+#endif
 
 static void test_wlan_scan(int argc, char **argv)
 {
@@ -2191,7 +2344,7 @@ static void dump_wlan_scan_opt_usage(void)
     (void)PRINTF("Usage:\r\n");
     (void)PRINTF(
         "    wlan-scan-opt ssid <ssid> bssid <bssid> "
-#ifdef CONFIG_SCAN_WITH_RSSIFILTER
+#if CONFIG_SCAN_WITH_RSSIFILTER
         "channel <channel> probes <probes> rssi_threshold <rssi_threshold>"
 #else
         "channel <channel> probes <probes>"
@@ -2203,7 +2356,7 @@ static void test_wlan_scan_opt(int argc, char **argv)
 {
     wlan_scan_params_v2_t wlan_scan_param;
     int arg = 1;
-#ifdef CONFIG_COMBO_SCAN
+#if CONFIG_COMBO_SCAN
     int num_ssid = 0;
 #endif
     struct
@@ -2212,7 +2365,7 @@ static void test_wlan_scan_opt(int argc, char **argv)
         unsigned bssid : 1;
         unsigned channel : 1;
         unsigned probes : 1;
-#ifdef CONFIG_SCAN_WITH_RSSIFILTER
+#if CONFIG_SCAN_WITH_RSSIFILTER
         unsigned rssi_threshold : 1;
 #endif
     } info;
@@ -2228,7 +2381,7 @@ static void test_wlan_scan_opt(int argc, char **argv)
     }
     do
     {
-#ifdef CONFIG_COMBO_SCAN
+#if CONFIG_COMBO_SCAN
         if (string_equal("ssid", argv[arg]))
         {
             if (num_ssid >= MAX_NUM_SSID)
@@ -2245,7 +2398,7 @@ static void test_wlan_scan_opt(int argc, char **argv)
                 (void)PRINTF("Error: SSID is too long\r\n");
                 return;
             }
-#ifdef CONFIG_COMBO_SCAN
+#if CONFIG_COMBO_SCAN
             (void)memcpy(wlan_scan_param.ssid[num_ssid], argv[arg + 1], strlen(argv[arg + 1]));
             num_ssid++;
 #else
@@ -2303,7 +2456,7 @@ static void test_wlan_scan_opt(int argc, char **argv)
             arg += 2;
             info.probes = 1;
         }
-#ifdef CONFIG_SCAN_WITH_RSSIFILTER
+#if CONFIG_SCAN_WITH_RSSIFILTER
         else if (!info.rssi_threshold && string_equal("rssi_threshold", argv[arg]))
         {
             if (arg + 1 >= argc)
@@ -2351,7 +2504,7 @@ static void test_wlan_scan_opt(int argc, char **argv)
         (void)PRINTF("Scan for ");
         if (info.ssid != 0U)
         {
-#ifdef CONFIG_COMBO_SCAN
+#if CONFIG_COMBO_SCAN
             (void)PRINTF("ssid \"%s\" ", wlan_scan_param.ssid[0]);
 #else
             (void)PRINTF("ssid \"%s\" ", wlan_scan_param.ssid);
@@ -2365,7 +2518,7 @@ static void test_wlan_scan_opt(int argc, char **argv)
         if (info.probes != 0U)
         {
             (void)PRINTF("with %d probes ", wlan_scan_param.num_probes);
-#ifdef CONFIG_SCAN_WITH_RSSIFILTER
+#if CONFIG_SCAN_WITH_RSSIFILTER
             wlan_set_rssi_threshold(wlan_scan_param.rssi_threshold);
             if (info.rssi_threshold != 0U)
                 (void)PRINTF("with %d rssi_threshold ", wlan_scan_param.rssi_threshold);
@@ -2530,6 +2683,69 @@ static void test_wlan_disconnect(int argc, char **argv)
     }
 }
 
+#if UAP_SUPPORT
+static void test_wlan_uap_disconnect_sta(int argc, char **argv)
+{
+    int ret, i;
+    uint8_t raw_mac[MLAN_MAC_ADDR_LENGTH];
+    wifi_sta_list_t *sl = NULL;
+
+    if (argc != 2)
+    {
+        (void)PRINTF("Usage: %s C0:95:DA:XX:XX:XX\r\n", argv[0]);
+        return;
+    }
+
+    ret = get_mac(argv[1], (char *)raw_mac, ':');
+    if (ret != 0)
+    {
+        (void)PRINTF("Error: invalid MAC argument\r\n");
+        return;
+    }
+
+    (void)wifi_uap_bss_sta_list(&sl);
+
+    if (sl == NULL)
+    {
+        (void)PRINTF("Failed to get sta list\n\r");
+        return;
+    }
+
+    wifi_sta_info_t *si = (wifi_sta_info_t *)(void *)(((t_u8 *)&sl->count) + sizeof(int));
+
+    if (!sl->count)
+    {
+        (void)PRINTF("No station conneted. Pls connect to internal uap firstly\r\n");
+        return;
+    }
+
+    for (i = 0; i < sl->count; i++)
+    {
+        if (memcmp(raw_mac, si[i].mac, MLAN_MAC_ADDR_LENGTH) == 0)
+        {
+            break;
+        }
+    }
+
+    if (i == sl->count)
+    {
+        (void)PRINTF("Error: There is no connected station whose mac address is %s\r\n", argv[1]);
+        (void)PRINTF("Pls enter correct mac address!\r\n");
+        return;
+    }
+
+    wlan_uap_disconnect_sta(raw_mac);
+
+#if !CONFIG_MEM_POOLS
+    OSA_MemoryFree(sl);
+#else
+    OSA_MemoryPoolFree(buf_256_MemoryPool, sl);
+#endif
+
+    return;
+}
+#endif
+
 static void test_wlan_stat(int argc, char **argv)
 {
     enum wlan_connection_state state;
@@ -2555,7 +2771,7 @@ static void test_wlan_stat(int argc, char **argv)
         case WLAN_IEEE_DEEP_SLEEP:
             (void)strcpy(ps_mode_str, "IEEE ps and Deep sleep");
             break;
-#ifdef CONFIG_WNM_PS
+#if CONFIG_WNM_PS
         case WLAN_WNM:
             (void)strcpy(ps_mode_str, "WNM ps");
             break;
@@ -2590,6 +2806,9 @@ static void test_wlan_stat(int argc, char **argv)
                 break;
             case WLAN_ASSOCIATED:
                 (void)PRINTF("Station associated (%s)\r\n", ps_mode_str);
+                break;
+             case WLAN_AUTHENTICATED:
+                (void)PRINTF("Station authenticated (%s)\r\n", ps_mode_str);
                 break;
             case WLAN_CONNECTING:
                 (void)PRINTF("Station connecting (%s)\r\n", ps_mode_str);
@@ -2657,7 +2876,11 @@ static void test_wlan_list(int argc, char **argv)
 static void test_wlan_info(int argc, char **argv)
 {
     enum wlan_connection_state state;
-    struct wlan_network *network = (struct wlan_network *)os_mem_alloc(sizeof(struct wlan_network));
+#if !CONFIG_MEM_POOLS
+    struct wlan_network *network = (struct wlan_network *)OSA_MemoryAllocate(sizeof(struct wlan_network));
+#else
+    struct wlan_network *network = OSA_MemoryPoolAllocate(buf_2048_MemoryPool);
+#endif
     if (!network)
     {
         (void)PRINTF("Error: unable to malloc memory\r\n");
@@ -2674,10 +2897,18 @@ static void test_wlan_info(int argc, char **argv)
     {
         switch (state)
         {
+            case WLAN_AUTHENTICATED:
             case WLAN_CONNECTED:
                 if (!wlan_get_current_network(network))
                 {
-                    (void)PRINTF("Station connected to:\r\n");
+                    if (state == WLAN_CONNECTED)
+                    {
+                        (void)PRINTF("Station connected to:\r\n");
+                    }
+                    else
+                    {
+                        (void)PRINTF("Station authenticated to:\r\n");
+                    }
                     print_network(network);
                 }
                 else
@@ -2698,7 +2929,13 @@ static void test_wlan_info(int argc, char **argv)
         print_network(network);
     }
     if (network)
-        os_mem_free(network);
+    {
+#if !CONFIG_MEM_POOLS
+        OSA_MemoryFree(network);
+#else
+        OSA_MemoryPoolFree(buf_2048_MemoryPool, network);
+#endif
+    }
 }
 
 static void test_wlan_address(int argc, char **argv)
@@ -2713,6 +2950,7 @@ static void test_wlan_address(int argc, char **argv)
     print_address(&network.ip, network.role);
 }
 
+#if UAP_SUPPORT
 static void test_wlan_get_uap_channel(int argc, char **argv)
 {
     int channel;
@@ -2753,10 +2991,13 @@ static void test_wlan_get_uap_sta_list(int argc, char **argv)
         (void)PRINTF("Power mfg status: %s\r\n", (si[i].power_mgmt_status == 0U) ? "active" : "power save");
         (void)PRINTF("Rssi : %d dBm\r\n\r\n", (signed char)si[i].rssi);
     }
-
-    os_mem_free(sl);
-    // #endif
+#if !CONFIG_MEM_POOLS
+    OSA_MemoryFree(sl);
+#else
+    OSA_MemoryPoolFree(buf_256_MemoryPool, sl);
+#endif
 }
+#endif /* UAP_SUPPORT */
 
 static void test_wlan_ieee_ps(int argc, char **argv)
 {
@@ -2827,7 +3068,8 @@ static void test_wlan_set_ps_cfg(int argc, char **argv)
         (void)PRINTF("Failed to set power save cfg, error: %d", ret);
 }
 
-#if defined(CONFIG_WNM_PS)
+#if !CONFIG_WPA_SUPP
+#if (CONFIG_WNM_PS)
 static void test_wlan_wnm_ps(int argc, char **argv)
 {
     int choice                = -1;
@@ -2878,6 +3120,7 @@ static void test_wlan_wnm_ps(int argc, char **argv)
     }
 }
 #endif
+#endif
 
 static void test_wlan_deep_sleep_ps(int argc, char **argv)
 {
@@ -2904,7 +3147,7 @@ static void test_wlan_deep_sleep_ps(int argc, char **argv)
         ret = wlan_deepsleepps_off();
         if (ret == WM_SUCCESS)
         {
-            (void)PRINTF("Turned off Deep Sleep Power Save mode");
+            (void)PRINTF("Turned off Deep Sleep Power Save mode\r\n");
         }
         else
         {
@@ -2916,7 +3159,7 @@ static void test_wlan_deep_sleep_ps(int argc, char **argv)
         ret = wlan_deepsleepps_on();
         if (ret == WM_SUCCESS)
         {
-            (void)PRINTF("Turned on Deep Sleep Power Save mode");
+            (void)PRINTF("Turned on Deep Sleep Power Save mode\r\n");
         }
         else
         {
@@ -2936,7 +3179,7 @@ static void test_wlan_get_beacon_interval(int argc, char **argv)
     (void)PRINTF("Beacon interval: %d\r\n", beacon_interval);
 }
 
-#ifdef CONFIG_WIFI_TX_PER_TRACK
+#if CONFIG_WIFI_TX_PER_TRACK
 static void dump_wlan_tx_pert_usage(void)
 {
     (void)PRINTF("Usage:\r\n");
@@ -2949,7 +3192,7 @@ static void dump_wlan_tx_pert_usage(void)
     (void)PRINTF("    <STA/UAP>: User needs to indicate which interface this tracking for.\r\n");
     (void)PRINTF("    <p>: Tx Pert check period. Unit is second.\r\n");
     (void)PRINTF(
-        "    <r>: Tx Pert ratio threshold (unit 10%). (Fail TX packet)/(Total TX packets). The default value is "
+        "    <r>: Tx Pert ratio threshold (unit 10 percent). (Fail TX packet)/(Total TX packets). The default value is "
         "5.\r\n");
     (void)PRINTF(
         "    <n>: A watermark of check number (default 5). Fw will start tracking Tx Pert after sending n "
@@ -2996,7 +3239,7 @@ static void test_wlan_tx_pert(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_TX_RX_HISTOGRAM
+#if CONFIG_TX_RX_HISTOGRAM
 static void dump_wlan_txrx_histogram_usage()
 {
     (void)PRINTF("Usage:\r\n");
@@ -3084,7 +3327,11 @@ static void test_wlan_txrx_histogram(int argc, char **argv)
     }
     if (buf_size > 0)
     {
-        buf = os_mem_alloc(buf_size);
+#if !CONFIG_MEM_POOLS
+        buf = (t_u8 *)OSA_MemoryAllocate(buf_size);
+#else
+        buf = (t_u8 *)OSA_MemoryPoolAllocate(buf_1024_MemoryPool);
+#endif
         if (!buf)
         {
             PRINTF("test_wlan_txrx_histogram buf allocate memory failed\r\n");
@@ -3111,22 +3358,22 @@ static void test_wlan_txrx_histogram(int argc, char **argv)
     {
         if (txrx_histogram.action & FLAG_TX_HISTOGRAM)
         {
-            PRINTF("The TX histogram statistic:\n");
-            PRINTF("============================================\n");
+            PRINTF("The TX histogram statistic:\r\n");
+            PRINTF("============================================\r\n");
             tx_ht_info = (tx_pkt_ht_rate_info *)pos;
             for (i = 0; i < 16; i++)
             {
-                PRINTF("htmcs_txcnt[%d]       = %u\n", i, tx_ht_info->htmcs_txcnt[i]);
-                PRINTF("htsgi_txcnt[%d]       = %u\n", i, tx_ht_info->htsgi_txcnt[i]);
-                PRINTF("htstbcrate_txcnt[%d]  = %u\n", i, tx_ht_info->htstbcrate_txcnt[i]);
+                PRINTF("htmcs_txcnt[%d]       = %u\r\n", i, tx_ht_info->htmcs_txcnt[i]);
+                PRINTF("htsgi_txcnt[%d]       = %u\r\n", i, tx_ht_info->htsgi_txcnt[i]);
+                PRINTF("htstbcrate_txcnt[%d]  = %u\r\n", i, tx_ht_info->htstbcrate_txcnt[i]);
             }
             pos += sizeof(tx_pkt_ht_rate_info);
             tx_vht_info = (tx_pkt_vht_rate_info *)pos;
             for (i = 0; i < 10; i++)
             {
-                PRINTF("vhtmcs_txcnt[%d]      = %u\n", i, tx_vht_info->vhtmcs_txcnt[i]);
-                PRINTF("vhtsgi_txcnt[%d]      = %u\n", i, tx_vht_info->vhtsgi_txcnt[i]);
-                PRINTF("vhtstbcrate_txcnt[%d] = %u\n", i, tx_vht_info->vhtstbcrate_txcnt[i]);
+                PRINTF("vhtmcs_txcnt[%d]      = %u\r\n", i, tx_vht_info->vhtmcs_txcnt[i]);
+                PRINTF("vhtsgi_txcnt[%d]      = %u\r\n", i, tx_vht_info->vhtsgi_txcnt[i]);
+                PRINTF("vhtstbcrate_txcnt[%d] = %u\r\n", i, tx_vht_info->vhtstbcrate_txcnt[i]);
             }
             pos += sizeof(tx_pkt_vht_rate_info);
             if (resp_value_size == (sizeof(tx_pkt_ht_rate_info) + sizeof(tx_pkt_vht_rate_info) +
@@ -3139,41 +3386,41 @@ static void test_wlan_txrx_histogram(int argc, char **argv)
                 tx_he_info = (tx_pkt_he_rate_info *)pos;
                 for (i = 0; i < 12; i++)
                 {
-                    PRINTF("hemcs_txcnt[%d]      = %u\n", i, tx_he_info->hemcs_txcnt[i]);
-                    PRINTF("hestbcrate_txcnt[%d] = %u\n", i, tx_he_info->hestbcrate_txcnt[i]);
+                    PRINTF("hemcs_txcnt[%d]      = %u\r\n", i, tx_he_info->hemcs_txcnt[i]);
+                    PRINTF("hestbcrate_txcnt[%d] = %u\r\n", i, tx_he_info->hestbcrate_txcnt[i]);
                 }
                 pos += sizeof(tx_pkt_he_rate_info);
             }
             tx_info = (tx_pkt_rate_info *)pos;
             for (i = 0; i < 2; i++)
-                PRINTF("nss_txcnt[%d]         = %u\n", i, tx_info->nss_txcnt[i]);
+                PRINTF("nss_txcnt[%d]         = %u\r\n", i, tx_info->nss_txcnt[i]);
             for (i = 0; i < 3; i++)
-                PRINTF("bandwidth_txcnt[%d]   = %u\n", i, tx_info->bandwidth_txcnt[i]);
+                PRINTF("bandwidth_txcnt[%d]   = %u\r\n", i, tx_info->bandwidth_txcnt[i]);
             for (i = 0; i < 4; i++)
-                PRINTF("preamble_txcnt[%d]    = %u\n", i, tx_info->preamble_txcnt[i]);
-            PRINTF("ldpc_txcnt           = %u\n", tx_info->ldpc_txcnt);
-            PRINTF("rts_txcnt            = %u\n", tx_info->rts_txcnt);
-            PRINTF("ack_RSSI             = %d\n\n", tx_info->ack_RSSI);
+                PRINTF("preamble_txcnt[%d]    = %u\r\n", i, tx_info->preamble_txcnt[i]);
+            PRINTF("ldpc_txcnt           = %u\r\n", tx_info->ldpc_txcnt);
+            PRINTF("rts_txcnt            = %u\r\n", tx_info->rts_txcnt);
+            PRINTF("ack_RSSI             = %d\r\n", tx_info->ack_RSSI);
             pos += sizeof(tx_pkt_rate_info);
         }
         if (txrx_histogram.action & FLAG_RX_HISTOGRAM)
         {
-            PRINTF("The RX histogram statistic:\n");
-            PRINTF("============================================\n");
+            PRINTF("The RX histogram statistic:\r\n");
+            PRINTF("============================================\r\n");
             rx_ht_info = (rx_pkt_ht_rate_info *)pos;
             for (i = 0; i < 16; i++)
             {
-                PRINTF("htmcs_rxcnt[%d]       = %u\n", i, rx_ht_info->htmcs_rxcnt[i]);
-                PRINTF("htsgi_rxcnt[%d]       = %u\n", i, rx_ht_info->htsgi_rxcnt[i]);
-                PRINTF("htstbcrate_rxcnt[%d]  = %u\n", i, rx_ht_info->htstbcrate_rxcnt[i]);
+                PRINTF("htmcs_rxcnt[%d]       = %u\r\n", i, rx_ht_info->htmcs_rxcnt[i]);
+                PRINTF("htsgi_rxcnt[%d]       = %u\r\n", i, rx_ht_info->htsgi_rxcnt[i]);
+                PRINTF("htstbcrate_rxcnt[%d]  = %u\r\n", i, rx_ht_info->htstbcrate_rxcnt[i]);
             }
             pos += sizeof(rx_pkt_ht_rate_info);
             rx_vht_info = (rx_pkt_vht_rate_info *)pos;
             for (i = 0; i < 10; i++)
             {
-                PRINTF("vhtmcs_rxcnt[%d]      = %u\n", i, rx_vht_info->vhtmcs_rxcnt[i]);
-                PRINTF("vhtsgi_rxcnt[%d]      = %u\n", i, rx_vht_info->vhtsgi_rxcnt[i]);
-                PRINTF("vhtstbcrate_rxcnt[%d] = %u\n", i, rx_vht_info->vhtstbcrate_rxcnt[i]);
+                PRINTF("vhtmcs_rxcnt[%d]      = %u\r\n", i, rx_vht_info->vhtmcs_rxcnt[i]);
+                PRINTF("vhtsgi_rxcnt[%d]      = %u\r\n", i, rx_vht_info->vhtsgi_rxcnt[i]);
+                PRINTF("vhtstbcrate_rxcnt[%d] = %u\r\n", i, rx_vht_info->vhtstbcrate_rxcnt[i]);
             }
             pos += sizeof(rx_pkt_vht_rate_info);
             if (resp_value_size == (sizeof(rx_pkt_ht_rate_info) + sizeof(rx_pkt_vht_rate_info) +
@@ -3186,44 +3433,46 @@ static void test_wlan_txrx_histogram(int argc, char **argv)
                 rx_he_info = (rx_pkt_he_rate_info *)pos;
                 for (i = 0; i < 12; i++)
                 {
-                    PRINTF("hemcs_rxcnt[%d]      = %u\n", i, rx_he_info->hemcs_rxcnt[i]);
-                    PRINTF("hestbcrate_rxcnt[%d] = %u\n", i, rx_he_info->hestbcrate_rxcnt[i]);
+                    PRINTF("hemcs_rxcnt[%d]      = %u\r\n", i, rx_he_info->hemcs_rxcnt[i]);
+                    PRINTF("hestbcrate_rxcnt[%d] = %u\r\n", i, rx_he_info->hestbcrate_rxcnt[i]);
                 }
                 pos += sizeof(rx_pkt_he_rate_info);
             }
             rx_info = (rx_pkt_rate_info *)pos;
             for (i = 0; i < 2; i++)
-                PRINTF("nss_rxcnt[%d]         = %u\n", i, rx_info->nss_rxcnt[i]);
-            PRINTF("nsts_rxcnt           = %u\n", rx_info->nsts_rxcnt);
+                PRINTF("nss_rxcnt[%d]         = %u\r\n", i, rx_info->nss_rxcnt[i]);
+            PRINTF("nsts_rxcnt           = %u\r\n", rx_info->nsts_rxcnt);
             for (i = 0; i < 3; i++)
-                PRINTF("bandwidth_rxcnt[%d]   = %u\n", i, rx_info->bandwidth_rxcnt[i]);
+                PRINTF("bandwidth_rxcnt[%d]   = %u\r\n", i, rx_info->bandwidth_rxcnt[i]);
             for (i = 0; i < 6; i++)
-                PRINTF("preamble_rxcnt[%d]    = %u\n", i, rx_info->preamble_rxcnt[i]);
+                PRINTF("preamble_rxcnt[%d]    = %u\r\n", i, rx_info->preamble_rxcnt[i]);
             for (i = 0; i < 2; i++)
-                PRINTF("ldpc_txbfcnt[%d]      = %u\n", i, rx_info->ldpc_txbfcnt[i]);
+                PRINTF("ldpc_txbfcnt[%d]      = %u\r\n", i, rx_info->ldpc_txbfcnt[i]);
             for (i = 0; i < 2; i++)
-                PRINTF("rssi_value[%d]        = %d\n", i, rx_info->rssi_value[i]);
+                PRINTF("rssi_value[%d]        = %d\r\n", i, rx_info->rssi_value[i]);
             for (i = 0; i < 4; i++)
-                PRINTF("rssi_chain0[%d]       = %d\n", i, rx_info->rssi_chain0[i]);
+                PRINTF("rssi_chain0[%d]       = %d\r\n", i, rx_info->rssi_chain0[i]);
             for (i = 0; i < 4; i++)
-                PRINTF("rssi_chain1[%d]       = %d\n", i, rx_info->rssi_chain1[i]);
-            PRINTF("\n");
+                PRINTF("rssi_chain1[%d]       = %d\r\n", i, rx_info->rssi_chain1[i]);
+            PRINTF("\r\n");
         }
     }
     else if (txrx_histogram.enable & ENABLE_TX_RX_HISTOGRAM)
-        PRINTF("Enable the TX and RX histogram statistic\n");
+        PRINTF("Enable the TX and RX histogram statistic\r\n");
     else
     {
-        PRINTF("Disable the TX and RX histogram statistic\n");
+        PRINTF("Disable the TX and RX histogram statistic\r\n");
     }
-    if (buf)
-    {
-        os_mem_free(buf);
-    }
+#if !CONFIG_MEM_POOLS
+    OSA_MemoryFree(buf);
+#else
+    OSA_MemoryPoolFree(buf_1024_MemoryPool, buf);
+#endif
+
 }
 #endif
 
-#ifdef CONFIG_ROAMING
+#if CONFIG_ROAMING
 static void dump_wlan_roaming_usage(void)
 {
     (void)PRINTF("Usage:\r\n");
@@ -3270,7 +3519,7 @@ static void test_wlan_roaming(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_WIFI_MAX_CLIENTS_CNT
+#if CONFIG_WIFI_MAX_CLIENTS_CNT
 static void test_wlan_set_max_clients_count(int argc, char **argv)
 {
     int max_clients_count;
@@ -3293,7 +3542,7 @@ static void test_wlan_set_max_clients_count(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_WIFI_RTS_THRESHOLD
+#if CONFIG_WIFI_RTS_THRESHOLD
 static void test_wlan_set_rts(int argc, char **argv)
 {
     int rthr;
@@ -3329,7 +3578,7 @@ static void test_wlan_set_rts(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_WIFI_FRAG_THRESHOLD
+#if CONFIG_WIFI_FRAG_THRESHOLD
 static void test_wlan_set_frag(int argc, char **argv)
 {
     int frag;
@@ -3366,49 +3615,8 @@ static void test_wlan_set_frag(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_11K_OFFLOAD
-static void test_wlan_11k_cfg(int argc, char **argv)
-{
-    int enable_11k;
-    int ret;
 
-    if (argc != 2)
-    {
-        (void)PRINTF("Usage: %s <0/1> < 0--disable 11k; 1---enable 11k>\r\n", argv[0]);
-        return;
-    }
-
-    errno      = 0;
-    enable_11k = (int)strtol(argv[1], NULL, 10);
-    if (errno != 0)
-    {
-        (void)PRINTF("Error during strtol:wlan_11k errno:%d\r\n", errno);
-        return;
-    }
-
-    ret = wlan_11k_cfg(enable_11k);
-
-    if (ret != WM_SUCCESS)
-    {
-        (void)PRINTF("Failed to 11k config\r\n");
-    }
-}
-
-static void test_wlan_11k_neighbor_req(int argc, char **argv)
-{
-    int ret;
-
-    ret = wlan_11k_neighbor_req();
-
-    if (ret != WM_SUCCESS)
-    {
-        (void)PRINTF("Failed to send 11k neighbor req\r\n");
-    }
-}
-
-#endif
-
-#ifdef CONFIG_11K
+#if CONFIG_11K
 static void test_wlan_host_11k_cfg(int argc, char **argv)
 {
     int enable_11k;
@@ -3448,7 +3656,7 @@ static void test_wlan_host_11k_neighbor_request(int argc, char **argv)
 {
     int ret;
     int len                            = 0;
-    t_u8 ssid[IEEEtypes_SSID_SIZE + 1] = {0};
+    char ssid[IEEEtypes_SSID_SIZE + 1] = {0};
 
     if ((argc != 1 && argc != 3) || (argc == 3 && !string_equal("ssid", argv[1])))
     {
@@ -3468,7 +3676,7 @@ static void test_wlan_host_11k_neighbor_request(int argc, char **argv)
         {
             (void)memcpy((void *)ssid, (const void *)argv[2], (size_t)strlen(argv[2]));
             len       = (int)strlen(argv[2]);
-            ssid[len] = (t_u8)'\0';
+            ssid[len] = '\0';
         }
     }
 
@@ -3481,7 +3689,7 @@ static void test_wlan_host_11k_neighbor_request(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_11V
+#if CONFIG_11V
 static void test_wlan_host_11v_bss_trans_query(int argc, char **argv)
 {
     int ret;
@@ -3516,8 +3724,8 @@ static void test_wlan_host_11v_bss_trans_query(int argc, char **argv)
 }
 #endif
 
-#ifndef CONFIG_WPA_SUPP
-#ifdef CONFIG_DRIVER_MBO
+#if !CONFIG_WPA_SUPP
+#if CONFIG_DRIVER_MBO
 static void test_wlan_mbo_cfg(int argc, char **argv)
 {
     int enable_mbo;
@@ -3617,19 +3825,80 @@ static void test_wlan_mbo_non_prefer_chs(int argc, char **argv)
 #endif
 #endif
 
-#if defined(CONFIG_11MC) || defined(CONFIG_11AZ)
+#if (CONFIG_11MC) || (CONFIG_11AZ)
+
+static void dump_wlan_unassoc_ftm_cfg_usage()
+{
+    (void)PRINTF("Usage:\r\n");
+    (void)PRINTF("wlan-unassoc-ftm-cfg <action> config <1/0>\r\n");
+    (void)PRINTF("action: 1 -> Set\r\n");
+    (void)PRINTF("config: 1 -> Enable; 0 -> Disable \r\n");
+}
+
+static void test_wlan_unassoc_ftm_cfg(int argc, char **argv)
+{
+    unsigned int action, config;
+    int arg = 2;
+
+    if (argc < 2 || argc > 4)
+    {
+        (void)PRINTF("Error: invalid number of arguments\r\n");
+        dump_wlan_unassoc_ftm_cfg_usage();
+        return;
+    }
+
+    action = a2hex_or_atoi(argv[1]);
+    if (action != 1)
+    {
+        dump_wlan_unassoc_ftm_cfg_usage();
+        return;
+    }
+
+    while (arg < argc)
+    {
+        if (string_equal("config", argv[arg]))
+        {
+            if (get_uint(argv[arg + 1], &config, strlen(argv[arg + 1])))
+            {
+                (void)PRINTF("Error: invalid config argument\r\n");
+                dump_wlan_unassoc_ftm_cfg_usage();
+                return;
+            }
+        }
+        else
+        {
+            (void)PRINTF("Error: invalid [%s] argument\r\n", argv[arg]);
+            dump_wlan_unassoc_ftm_cfg_usage();
+            return;
+        }
+        arg += 2;
+    }
+    wlan_unassoc_ftm_cfg(action, config);
+}
+
 static void dump_wlan_ftm_ctrl_usage()
 {
     (void)PRINTF("Usage:\r\n");
     (void)PRINTF("wlan-ftm-ctrl <action> loop_cnt <count> channel <channel> mac <peer_mac>\r\n");
-    (void)PRINTF("action: 1 start 2: stop \r\n");
+    (void)PRINTF("action:\r\n");
+    (void)PRINTF(" 1: Start non-secure 11mc/11az FTM with associated Peer AP\r\n");
+    (void)PRINTF(" 2: Stop FTM session\r\n");
+    (void)PRINTF(" 3: Start secure 11az FTM with associated Peer AP\r\n");
+    (void)PRINTF(" 4: Start non-secure 11az/11mc FTM with unassoc Peer\r\n");
+    (void)PRINTF(" 5: Start secure 11az FTM with unassociated & pre-authenticated Peer\r\n");
     (void)PRINTF("loop_cnt: number of ftm sessions to run repeatedly (default:1, 0:non-stop, n:times>)\r\n");
     (void)PRINTF("channel: Channel on which FTM must be started\r\n");
-    (void)PRINTF("mac: Mac address of the peer with whom FTM session is required\r\n");
+    (void)PRINTF("mac: Mac address of the peer with whom FTM session is required\r\n\r\n");
     (void)PRINTF("Example:\r\n");
-    (void)PRINTF("Start ftm:\r\n");
-    (void)PRINTF("wlan-ftm-ctrl 1 loop_cnt 2 channel 36 mac 00:50:43:20:bc:44\r\n");
-    (void)PRINTF("Stop ftm:\r\n");
+    (void)PRINTF("Run non-secure FTM session:\r\n");
+    (void)PRINTF("wlan-ftm-ctrl 1 loop_cnt 1 channel 36 mac 00:50:43:20:bc:44\r\n");
+    (void)PRINTF("Runs secure 11az FTM session:\r\n");
+    (void)PRINTF("wlan-ftm-ctrl 3 loop_cnt 1 channel 36 mac 00:50:43:20:bc:44\r\n");
+    (void)PRINTF("Runs non-secure FTM session with unassoc peer until user terminate:\r\n");
+    (void)PRINTF("wlan-ftm-ctrl 4 loop_cnt 1 channel 36 mac 00:50:43:20:bc:44\r\n");
+    (void)PRINTF("Runs Secure FTM session with unassociated Peer AP:\r\n");
+    (void)PRINTF("wlan-ftm-ctrl 5 loop_cnt 1 channel 36 mac 00:50:43:20:bc:44\r\n");
+    (void)PRINTF("Stop the FTM session:\r\n");
     (void)PRINTF("wlan-ftm-ctrl 2\r\n");
 }
 static void test_wlan_ftm_ctrl(int argc, char **argv)
@@ -3654,7 +3923,7 @@ static void test_wlan_ftm_ctrl(int argc, char **argv)
     }
 
     action = a2hex_or_atoi(argv[1]);
-    if (action != 1 && action != 2)
+    if (action < 1 && action > 5)
     {
         dump_wlan_ftm_ctrl_usage();
         return;
@@ -3709,160 +3978,482 @@ done:
     wlan_ftm_start_stop(action, loop_cnt, peer_mac, channel);
 }
 
-static void dump_wlan_ftm_cfg_usage()
+static void dump_wlan_11mc_nego_cfg()
 {
     (void)PRINTF("Usage:\r\n");
-    (void)PRINTF("wlan-ftm-cfg <protocol>\r\n");
     (void)PRINTF(
-        "wlan-ftm-cfg <protocol> num_meas <num_meas> meas_freq <meas_freq> r2i_sts <r2i_sts> i2r_lmr <i2r_lmr>\r\n");
-    (void)PRINTF("protocol:\r\n");
-    /*(void)PRINTF("0: Dot11mc\r\n");*/
-    (void)PRINTF("1: Dot11az_ntb\r\n");
-    /*(void)PRINTF("2: Dot11az_tb\r\n");*/
-    (void)PRINTF("num_meas: 0-255\r\n");
-    (void)PRINTF("meas_freq: 1-255 in 0.1 Hz\r\n");
-    (void)PRINTF("r2i_sts: 0-3\r\n");
-    (void)PRINTF("i2r_lmr: 0 never, 1 always, 2 up to RSTA\r\n");
+        "wlan-11mc-nego-cfg burst_dur <burst_dur> min_delta <min_delta> asap <asap>"
+        " ftm_per_burst <ftm_per_burst> BW <bw> burst_period <burst_period>\r\n");
+
+    (void)PRINTF("burst_dur: 2 or 11\r\n");
+    (void)PRINTF("min_delta: 1 to 63\r\n");
+    (void)PRINTF("asap: 0 or 1\r\n");
+    (void)PRINTF("ftm_per_burst: 2 to 10\r\n");
+    (void)PRINTF("BW: 9 to 13\r\n");
+    (void)PRINTF("burst_period: 1 to 10\r\n");
+    (void)PRINTF(
+        "Example:\r\n"
+        "wlan-11mc-nego-cfg burst_dur 11 min_delta 60 asap 1 ftm_per_burst 5 BW 13 burst_period 10");
 }
 
-static void test_wlan_ftm_cfg(int argc, char **argv)
+static void dump_wlan_civ_cfg()
 {
-    unsigned protocol;
-    if ((argc < 2) || (argc > 10))
+    (void)PRINTF("Usage:\r\n");
+    (void)PRINTF(
+        "wlan-civ-cfg civ_req <civ_req> loc_type <loc_type> country_code <country_code>"
+        " addr_type <addr_type>\r\n");
+
+    (void)PRINTF("civ_req: 0 or 1\r\n");
+    (void)PRINTF("loc_type: 1\r\n");
+    (void)PRINTF("country_code: 0 for USA\r\n");
+    (void)PRINTF("addr_type: 22\r\n");
+    (void)PRINTF(
+        "Example:\r\n"
+        "wlan-civ-cfg civ_req 1 loc_type 1 country_code 0 addr_type 22");
+}
+
+static void dump_wlan_loc_cfg()
+{
+    (void)PRINTF("Usage:\r\n");
+    (void)PRINTF(
+        "wlan-loc-cfg lci_req <lci request> latit <latitude> longi <longitude> altit <altitude>"
+        " lat_uncert <latitude uncertainity> lon_uncert <longitude uncertainity> alt_uncert <altitude "
+        "uncertainity>\r\n");
+
+    (void)PRINTF("lci_req: 0 or 1\r\n");
+    (void)PRINTF("latitude: -180.0 to 180.0\r\n");
+    (void)PRINTF("longitude: -180.0 to 180.0\r\n");
+    (void)PRINTF("altitude: -180.0 to 180.0\r\n");
+    (void)PRINTF("latitude uncertainity: 0 to 255\r\n");
+    (void)PRINTF("longitude uncertainity: 0 to 255\r\n");
+    (void)PRINTF("altitude uncertainity: 0 to 255\r\n");
+    (void)PRINTF(
+        "Example:\r\n"
+        "wlan-loc-cfg lci_req 1 latit -111.111 longi 222.222 altit 33.333 lat_uncert 1 lon_uncert 2 alt_uncert 3");
+}
+
+static void dump_wlan_11az_rang_cfg()
+{
+    (void)PRINTF("Usage:\r\n");
+    (void)PRINTF(
+        "wlan-11az-rang-cfg <protocol> format_bw <format_bw> num_measurements <num_measurements>"
+        " measurement_freq <measurement_freq> i2r_sts <i2r_sts> r2i_sts <r2i_sts> i2r_lmr <i2r_lmr>\r\n");
+
+    (void)PRINTF("protocol: 0 or 1\r\n");
+    (void)PRINTF("format_bw: 0 to 2\r\n");
+    (void)PRINTF("num_measurements: 1 to 10\r\n");
+    (void)PRINTF("measurement_freq: 1 to 10\r\n");
+    (void)PRINTF("i2r_sts: 0/1 - Num of antennas: 0=>1 antenna and 1=>2 antennas\r\n");
+    (void)PRINTF("r2i_sts: 0/1 - Num of antennas: 0=>1 antenna and 1=>2 antennas\r\n");
+    (void)PRINTF("i2r_lmr: 0 never, 1 always, 2 up to RSTA\r\n");
+    (void)PRINTF(
+        "Example:\r\n"
+        "wlan-11az-rang-cfg 1 format_bw 2 num_measurements 5 measurement_freq 4 i2r_sts 0 r2i_sts 0 i2r_lmr 0\r\n");
+}
+
+static void test_wlan_loc_cfg(int argc, char **argv)
+{
+    unsigned lci_req, lati_uncertanity, longi_uncertanity, alti_uncertanity;
+    double latitude, longitude, altitude;
+    location_cfg_info_t lci;
+    int arg = 1;
+    if (argc != 15)
     {
         (void)PRINTF("Error: invalid number of arguments\r\n");
-        dump_wlan_ftm_cfg_usage();
+        dump_wlan_loc_cfg();
+        return;
+    }
+
+    if (argc >= 2)
+    {
+        lci_req           = 0;
+        latitude          = LCI_LATITIUDE;
+        longitude         = LCI_LONGITUDE;
+        altitude          = LCI_ALTITUDE;
+        lati_uncertanity  = LCI_LATITUDE_UNCERTAINITY;
+        longi_uncertanity = LCI_LONGITUDE_UNCERTAINITY;
+        alti_uncertanity  = LCI_ALTITUDE_UNCERTAINITY;
+    }
+
+    while (arg < argc)
+    {
+        if (string_equal("lci_req", argv[arg]))
+        {
+            if (get_uint(argv[arg + 1], &lci_req, strlen(argv[arg + 1])))
+            {
+                (void)PRINTF("Error: invalid number of LCI require argument\r\n");
+                dump_wlan_loc_cfg();
+                return;
+            }
+        }
+        else if (string_equal("latit", argv[arg]))
+        {
+            latitude = strtod(argv[arg + 1], NULL);
+            if (!latitude)
+            {
+                (void)PRINTF("Error: invalid latitude argument\r\n");
+                dump_wlan_loc_cfg();
+                return;
+            }
+        }
+        else if (string_equal("longi", argv[arg]))
+        {
+            longitude = strtod(argv[arg + 1], NULL);
+            if (!longitude)
+            {
+                (void)PRINTF("Error: invalid longitude argument\r\n");
+                dump_wlan_loc_cfg();
+                return;
+            }
+        }
+        else if (string_equal("altit", argv[arg]))
+        {
+            altitude = strtod(argv[arg + 1], NULL);
+            if (!latitude)
+            {
+                (void)PRINTF("Error: invalid latitude argument\r\n");
+                dump_wlan_loc_cfg();
+                return;
+            }
+        }
+        else if (string_equal("lat_uncert", argv[arg]))
+        {
+            if (get_uint(argv[arg + 1], &lati_uncertanity, strlen(argv[arg + 1])))
+            {
+                (void)PRINTF("Error: invalid latitude uncertanity argument\r\n");
+                dump_wlan_loc_cfg();
+                return;
+            }
+        }
+        else if (string_equal("lon_uncert", argv[arg]))
+        {
+            if (get_uint(argv[arg + 1], &longi_uncertanity, strlen(argv[arg + 1])))
+            {
+                (void)PRINTF("Error: invalid longitude uncertanity argument\r\n");
+                dump_wlan_loc_cfg();
+                return;
+            }
+        }
+        else if (string_equal("alt_uncert", argv[arg]))
+        {
+            if (get_uint(argv[arg + 1], &alti_uncertanity, strlen(argv[arg + 1])))
+            {
+                (void)PRINTF("Error: invalid altitude uncertanity argument\r\n");
+                dump_wlan_loc_cfg();
+                return;
+            }
+        }
+        else
+        {
+            (void)PRINTF("Error: invalid [%s] argument\r\n", argv[arg]);
+            dump_wlan_loc_cfg();
+            return;
+        }
+        arg += 2;
+    }
+
+    lci.lci_req   = lci_req;
+    lci.longitude = longitude;
+    lci.latitude  = latitude;
+    lci.altitude  = altitude;
+    lci.lat_unc   = lati_uncertanity;
+    lci.long_unc  = longi_uncertanity;
+    lci.alt_unc   = alti_uncertanity;
+
+    wlan_ftm_location_cfg(&lci);
+    return;
+}
+
+static void test_wlan_civ_cfg(int argc, char **argv)
+{
+    unsigned civ_req, loc_type, addr_type, addr_len, country_code;
+    location_civic_rep_t lcr;
+    int arg        = 1;
+    char *civ_addr = CIVIC_ADDRESS;
+    if (argc != 9)
+    {
+        (void)PRINTF("Error: invalid number of arguments\r\n");
+        dump_wlan_civ_cfg();
+        return;
+    }
+
+    civ_req      = 0;
+    loc_type     = CIVIC_LOCATION_TYPE;
+    addr_type    = CIVIC_ADDRESS_TYPE;
+    country_code = CIVIC_COUNTRY_CODE;
+
+    while (arg < argc)
+    {
+        if (string_equal("civ_req", argv[arg]))
+        {
+            if (get_uint(argv[arg + 1], &civ_req, strlen(argv[arg + 1])))
+            {
+                (void)PRINTF("Error: invalid number of civic require argument\r\n");
+                dump_wlan_civ_cfg();
+                return;
+            }
+        }
+        else if (string_equal("loc_type", argv[arg]))
+        {
+            if (get_uint(argv[arg + 1], &loc_type, strlen(argv[arg + 1])))
+            {
+                (void)PRINTF("Error: invalid location type argument\r\n");
+                dump_wlan_civ_cfg();
+                return;
+            }
+        }
+        else if (string_equal("addr_type", argv[arg]))
+        {
+            if (get_uint(argv[arg + 1], &addr_type, strlen(argv[arg + 1])))
+            {
+                (void)PRINTF("Error: invalid address type argument\r\n");
+                dump_wlan_civ_cfg();
+                return;
+            }
+        }
+        else if (string_equal("country_code", argv[arg]))
+        {
+            if (get_uint(argv[arg + 1], &country_code, strlen(argv[arg + 1])))
+            {
+                (void)PRINTF("Error: invalid address length argument\r\n");
+                dump_wlan_civ_cfg();
+                return;
+            }
+        }
+        else
+        {
+            (void)PRINTF("Error: invalid [%s] argument\r\n", argv[arg]);
+            dump_wlan_civ_cfg();
+            return;
+        }
+        arg += 2;
+    }
+
+    lcr.civic_req           = civ_req;
+    lcr.civic_location_type = loc_type;
+    lcr.civic_address_type  = addr_type;
+    lcr.country_code        = country_code;
+
+    wlan_ftm_civic_cfg(&lcr);
+    return;
+}
+
+static void test_wlan_11mc_nego_cfg(int argc, char **argv)
+{
+    unsigned burst_exp, burst_dur, min_delta, asap, ftm_per_burst, bw, burst_period;
+    ftm_11mc_nego_cfg_t dot11mc_cfg;
+    int arg        = 1;
+    char *civ_addr = CIVIC_ADDRESS;
+    if (argc != 13)
+    {
+        (void)PRINTF("Error: invalid number of arguments\r\n");
+        dump_wlan_11mc_nego_cfg();
+        return;
+    }
+
+    burst_exp     = 0;
+    burst_dur     = BURST_DURATION;
+    min_delta     = MIN_DELTA;
+    asap          = IS_ASAP;
+    ftm_per_burst = FTM_PER_BURST;
+    bw            = BW;
+    burst_period  = BURST_PERIOD;
+
+    while (arg < argc)
+    {
+        if (string_equal("burst_dur", argv[arg]))
+        {
+            if (get_uint(argv[arg + 1], &burst_dur, strlen(argv[arg + 1])))
+            {
+                (void)PRINTF("Error: invalid value of burst duration argument\r\n");
+                dump_wlan_11mc_nego_cfg();
+                return;
+            }
+        }
+        else if (string_equal("min_delta", argv[arg]))
+        {
+            if (get_uint(argv[arg + 1], &min_delta, strlen(argv[arg + 1])))
+            {
+                (void)PRINTF("Error: invalid minimum delta argument\r\n");
+                dump_wlan_11mc_nego_cfg();
+                return;
+            }
+        }
+        else if (string_equal("asap", argv[arg]))
+        {
+            if (get_uint(argv[arg + 1], &asap, strlen(argv[arg + 1])))
+            {
+                (void)PRINTF("Error: invalid ASAP argument\r\n");
+                dump_wlan_11mc_nego_cfg();
+                return;
+            }
+        }
+        else if (string_equal("ftm_per_burst", argv[arg]))
+        {
+            if (get_uint(argv[arg + 1], &ftm_per_burst, strlen(argv[arg + 1])))
+            {
+                (void)PRINTF("Error: invalid frames per burst argument\r\n");
+                dump_wlan_11mc_nego_cfg();
+                return;
+            }
+        }
+        else if (string_equal("BW", argv[arg]))
+        {
+            if (get_uint(argv[arg + 1], &bw, strlen(argv[arg + 1])))
+            {
+                (void)PRINTF("Error: invalid bandwidth argument\r\n");
+                dump_wlan_11mc_nego_cfg();
+                return;
+            }
+        }
+        else if (string_equal("burst_period", argv[arg]))
+        {
+            if (get_uint(argv[arg + 1], &burst_period, strlen(argv[arg + 1])))
+            {
+                (void)PRINTF("Error: invalid burst period argument\r\n");
+                dump_wlan_11mc_nego_cfg();
+                return;
+            }
+        }
+        else
+        {
+            (void)PRINTF("Error: invalid [%s] argument\r\n", argv[arg]);
+            dump_wlan_11mc_nego_cfg();
+            return;
+        }
+        arg += 2;
+    }
+
+    dot11mc_cfg.burst_exponent  = burst_exp;
+    dot11mc_cfg.burst_duration  = burst_dur;
+    dot11mc_cfg.min_delta_FTM   = min_delta;
+    dot11mc_cfg.is_ASAP         = asap;
+    dot11mc_cfg.per_burst_FTM   = ftm_per_burst;
+    dot11mc_cfg.channel_spacing = bw;
+    dot11mc_cfg.burst_period    = burst_period;
+
+    wlan_ftm_11mc_cfg(&dot11mc_cfg);
+    return;
+}
+
+static void test_wlan_11az_rang_cfg(int argc, char **argv)
+{
+    unsigned protocol, format_bw, num_measurements, measurement_freq, i2r_sts, r2i_sts, i2r_lmr, civic_req, lci_req;
+    ranging_11az_cfg_t cfg_11az;
+    int arg = 2;
+
+    if (argc != 14)
+    {
+        (void)PRINTF("Error: invalid number of arguments\r\n");
+        dump_wlan_11az_rang_cfg();
         return;
     }
 
     if (get_uint(argv[1], &protocol, strlen(argv[1])))
     {
         (void)PRINTF("Error: invalid protocol argument\r\n");
-        dump_wlan_ftm_ctrl_usage();
+        dump_wlan_11az_rang_cfg();
         return;
     }
 
-    if (protocol != 0 && protocol != 1 && protocol != 2)
+    if (protocol != 0 && protocol != 1)
     {
         (void)PRINTF("Error: invalid protocol argument\r\n");
-        dump_wlan_ftm_cfg_usage();
+        dump_wlan_11az_rang_cfg();
         return;
     }
 
-    if (protocol == 0)
-    {
-        (void)PRINTF("Not support 802_11mc\r\n");
-        dump_wlan_ftm_cfg_usage();
-        return;
-    }
-    else // (protocol == 1) || (protocol == 2)
-    {
-        unsigned num_measurements, measurement_freq, r2i_sts, i2r_lmr, civic_req, lci_req;
-        ranging_11az_cfg_t cfg_11az;
-        int arg = 2;
-        if (protocol == 2) // not yet supported
-        {
-            // cfg_11az->type = FTM_TB_RANGING_CFG_TLV_ID;
-            (void)PRINTF("Not support 802_11az tb\r\n");
-        }
-        else // (protocol == 1)
-        {
-            // cfg_11az->type = FTM_NTB_RANGING_CFG_TLV_ID;
-        }
+    format_bw        = FORMAT_BW;
+    num_measurements = AZ_NUMBER_OF_MEASUREMENTS;
+    measurement_freq = AZ_MEASUREMENT_FREQ;
+    i2r_sts          = MAX_I2R_STS_UPTO80;
+    r2i_sts          = MAX_R2I_STS_UPTO80;
+    i2r_lmr          = I2R_LMR_FEEDBACK;
+    civic_req        = CIVIC_REQUEST;
+    lci_req          = LCI_REQUEST;
 
-        if (argc >= 2)
+    while (arg < argc)
+    {
+        if (string_equal("num_measurements", argv[arg]))
         {
-            num_measurements = AZ_NUMBER_OF_MEASUREMENTS;
-            measurement_freq = AZ_MEASUREMENT_FREQ;
-            r2i_sts          = MAX_R2I_STS_UPTO80;
-            i2r_lmr          = I2R_LMR_FEEDBACK;
-            civic_req        = CIVIC_REQUEST;
-            lci_req          = LCI_REQUEST;
-        }
-
-        while (arg < argc)
-        {
-            if (string_equal("num_meas", argv[arg]))
+            if (get_uint(argv[arg + 1], &num_measurements, strlen(argv[arg + 1])))
             {
-                if (get_uint(argv[arg + 1], &num_measurements, strlen(argv[arg + 1])))
-                {
-                    (void)PRINTF("Error: invalid number of measurements argument\r\n");
-                    dump_wlan_ftm_cfg_usage();
-                    return;
-                }
-            }
-            else if (string_equal("meas_freq", argv[arg]))
-            {
-                if (get_uint(argv[arg + 1], &measurement_freq, strlen(argv[arg + 1])))
-                {
-                    (void)PRINTF("Error: invalid measurement frequency argument\r\n");
-                    dump_wlan_ftm_cfg_usage();
-                    return;
-                }
-            }
-            else if (string_equal("r2i_sts", argv[arg]))
-            {
-                if (get_uint(argv[arg + 1], &r2i_sts, strlen(argv[arg + 1])))
-                {
-                    (void)PRINTF("Error: invalid R2I STS argument\r\n");
-                    dump_wlan_ftm_cfg_usage();
-                    return;
-                }
-            }
-            else if (string_equal("i2r_lmr", argv[arg]))
-            {
-                if (get_uint(argv[arg + 1], &i2r_lmr, strlen(argv[arg + 1])))
-                {
-                    (void)PRINTF("Error: invalid R2I STS argument\r\n");
-                    dump_wlan_ftm_cfg_usage();
-                    return;
-                }
-            }
-            else if (string_equal("civic_req", argv[arg]))
-            {
-                if (get_uint(argv[arg + 1], &civic_req, strlen(argv[arg + 1])))
-                {
-                    (void)PRINTF("Error: invalid civic request argument\r\n");
-                    dump_wlan_ftm_cfg_usage();
-                    return;
-                }
-            }
-            else if (string_equal("lci_req", argv[arg]))
-            {
-                if (get_uint(argv[arg + 1], &lci_req, strlen(argv[arg + 1])))
-                {
-                    (void)PRINTF("Error: invalid LCI request argument\r\n");
-                    dump_wlan_ftm_cfg_usage();
-                    return;
-                }
-            }
-            else
-            {
-                (void)PRINTF("Error: invalid [%s] argument\r\n", argv[arg]);
-                dump_wlan_ftm_cfg_usage();
+                (void)PRINTF("Error: invalid number of measurements argument\r\n");
+                dump_wlan_11az_rang_cfg();
                 return;
             }
-            arg += 2;
         }
-
-        cfg_11az.format_bw                 = FORMAT_BW;
-        cfg_11az.max_i2r_sts_upto80        = MAX_I2R_STS_UPTO80;
-        cfg_11az.max_r2i_sts_upto80        = r2i_sts;
-        cfg_11az.az_measurement_freq       = measurement_freq;
-        cfg_11az.az_number_of_measurements = num_measurements;
-        cfg_11az.i2r_lmr_feedback          = i2r_lmr;
-
-        cfg_11az.civic_req = civic_req;
-        cfg_11az.lci_req   = lci_req;
-
-        wlan_ftm_cfg(protocol, &cfg_11az);
+        else if (string_equal("measurement_freq", argv[arg]))
+        {
+            if (get_uint(argv[arg + 1], &measurement_freq, strlen(argv[arg + 1])))
+            {
+                (void)PRINTF("Error: invalid measurement frequency argument\r\n");
+                dump_wlan_11az_rang_cfg();
+                return;
+            }
+        }
+        else if (string_equal("i2r_sts", argv[arg]))
+        {
+            if (get_uint(argv[arg + 1], &i2r_sts, strlen(argv[arg + 1])))
+            {
+                (void)PRINTF("Error: invalid I2R STS argument\r\n");
+                dump_wlan_11az_rang_cfg();
+                return;
+            }
+        }
+        else if (string_equal("r2i_sts", argv[arg]))
+        {
+            if (get_uint(argv[arg + 1], &r2i_sts, strlen(argv[arg + 1])))
+            {
+                (void)PRINTF("Error: invalid R2I STS argument\r\n");
+                dump_wlan_11az_rang_cfg();
+                return;
+            }
+        }
+        else if (string_equal("i2r_lmr", argv[arg]))
+        {
+            if (get_uint(argv[arg + 1], &i2r_lmr, strlen(argv[arg + 1])))
+            {
+                (void)PRINTF("Error: invalid R2I STS argument\r\n");
+                dump_wlan_11az_rang_cfg();
+                return;
+            }
+        }
+        else if (string_equal("format_bw", argv[arg]))
+        {
+            if (get_uint(argv[arg + 1], &format_bw, strlen(argv[arg + 1])))
+            {
+                (void)PRINTF("Error: invalid format bandwidth argument\r\n");
+                dump_wlan_11az_rang_cfg();
+                return;
+            }
+        }
+        else
+        {
+            (void)PRINTF("Error: invalid [%s] argument\r\n", argv[arg]);
+            dump_wlan_11az_rang_cfg();
+            return;
+        }
+        arg += 2;
     }
+
+    cfg_11az.format_bw                 = format_bw;
+    cfg_11az.max_i2r_sts_upto80        = i2r_sts;
+    cfg_11az.max_r2i_sts_upto80        = r2i_sts;
+    cfg_11az.az_measurement_freq       = measurement_freq;
+    cfg_11az.az_number_of_measurements = num_measurements;
+    cfg_11az.i2r_lmr_feedback          = i2r_lmr;
+
+    cfg_11az.civic_req = civic_req;
+    cfg_11az.lci_req   = lci_req;
+
+    wlan_ftm_cfg(protocol, &cfg_11az);
     return;
 }
 #endif
 
-#ifdef CONFIG_WPA_SUPP
-#ifdef CONFIG_11AX
+#if CONFIG_WPA_SUPP
+#if (CONFIG_11AX && defined(CONFIG_MBO))
 static void test_wlan_mbo_non_prefer_chs(int argc, char **argv)
 {
     int ret;
@@ -4029,7 +4620,7 @@ static void test_wlan_pmksa_list(int argc, char **argv)
         return;
     }
 
-    buf = (char *)os_mem_calloc(buflen);
+    buf = (char *)OSA_MemoryAllocate(buflen);
 
     if (buf == NULL)
     {
@@ -4104,7 +4695,7 @@ static void test_wlan_set_scan_interval(int argc, char **argv)
 
 #endif
 
-#ifdef CONFIG_UAP_STA_MAC_ADDR_FILTER
+#if CONFIG_UAP_STA_MAC_ADDR_FILTER
 /**
  *  @brief Show usage information for the sta_filter_table command
  *
@@ -4174,7 +4765,7 @@ static void test_wlan_set_sta_filter(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_WIFI_GET_LOG
+#if CONFIG_WIFI_GET_LOG
 static void test_wlan_get_log(int argc, char **argv)
 {
     wlan_pkt_stats_t stats;
@@ -4220,11 +4811,14 @@ static void test_wlan_get_log(int argc, char **argv)
             "wepicverrcnt-3                     %u\r\n"
             "wepicverrcnt-4                     %u\r\n"
             "beaconReceivedCount                %u\r\n"
-            "beaconMissedCount                  %u\r\n",
+            "beaconMissedCount                  %u\r\n"
+            "rxUnicastCount                     %u\r\n"
+            "txOverrunCount                     %u\r\n"
+            "rxOverrunCount                     %u\r\n",
             stats.mcast_tx_frame, stats.failed, stats.retry, stats.multi_retry, stats.frame_dup, stats.rts_success,
             stats.rts_failure, stats.ack_failure, stats.rx_frag, stats.mcast_rx_frame, stats.fcs_error, stats.tx_frame,
             stats.wep_icv_error[0], stats.wep_icv_error[1], stats.wep_icv_error[2], stats.wep_icv_error[3],
-            stats.bcn_rcv_cnt, stats.bcn_miss_cnt);
+            stats.bcn_rcv_cnt, stats.bcn_miss_cnt, stats.rx_unicast_cnt, stats.tx_overrun_cnt, stats.rx_overrun_cnt);
 
         if (argc == 3 && !(strcmp(argv[2], "ext")))
         {
@@ -4362,7 +4956,7 @@ static void test_wlan_get_log(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_MEF_CFG
+#if CONFIG_MEF_CFG
 static void dump_multiple_mef_config_usage()
 {
     (void)PRINTF("Usage:\r\n");
@@ -4433,16 +5027,16 @@ static void test_wlan_set_multiple_mef_config(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_HOST_SLEEP
+#if CONFIG_HOST_SLEEP
 #ifdef RW610
 static void test_wlan_wakeup_condition(int argc, char **argv)
 {
-#ifdef CONFIG_MEF_CFG
+#if CONFIG_MEF_CFG
     uint8_t is_mef = MFALSE;
 #endif
     uint32_t wake_up_conds = 0;
 
-#ifdef CONFIG_MEF_CFG
+#if CONFIG_MEF_CFG
     if (argc < 2 || argc > 3)
 #else
     if (argc != 3)
@@ -4450,7 +5044,7 @@ static void test_wlan_wakeup_condition(int argc, char **argv)
     {
         (void)PRINTF("Error: invalid number of arguments\r\n");
         (void)PRINTF("Usage:\r\n");
-#ifdef CONFIG_MEF_CFG
+#if CONFIG_MEF_CFG
         (void)PRINTF("    wlan-wakeup-condition <mef/wowlan wake_up_conds>\r\n");
 #else
         (void)PRINTF("    wlan-wakeup-condition <wowlan wake_up_conds>\r\n");
@@ -4464,17 +5058,17 @@ static void test_wlan_wakeup_condition(int argc, char **argv)
         (void)PRINTF("	       bit 4: WAKE_ON_ARP_BROADCAST\r\n");
         (void)PRINTF("	       bit 6: WAKE_ON_MGMT_FRAME\r\n");
         (void)PRINTF("	       All bit 0 discard and not wakeup host\r\n");
-#ifdef CONFIG_MEF_CFG
+#if CONFIG_MEF_CFG
         (void)PRINTF("    mef     -- MEF host wakeup\r\n");
 #endif
         (void)PRINTF("Example:\r\n");
-#ifdef CONFIG_MEF_CFG
+#if CONFIG_MEF_CFG
         (void)PRINTF("    wlan-wakeup-condition mef\r\n");
 #endif
         (void)PRINTF("    wlan-wakeup-condition wowlan 0x1e\r\n");
         return;
     }
-#ifdef CONFIG_MEF_CFG
+#if CONFIG_MEF_CFG
     if (string_equal("mef", argv[1]))
     {
         is_mef = MTRUE;
@@ -4499,14 +5093,14 @@ static void test_wlan_wakeup_condition(int argc, char **argv)
     }
     else
     {
-#ifdef CONFIG_MEF_CFG
+#if CONFIG_MEF_CFG
         (void)PRINTF("wowlan/mef need be specified\r\n");
 #else
         (void)PRINTF("wowlan need be specified\r\n");
 #endif
         return;
     }
-#ifdef CONFIG_MEF_CFG
+#if CONFIG_MEF_CFG
     wlan_wowlan_config(is_mef, wake_up_conds);
 #else
     wlan_wowlan_config(wake_up_conds);
@@ -4515,7 +5109,7 @@ static void test_wlan_wakeup_condition(int argc, char **argv)
 }
 #endif /*RW610*/
 
-#ifdef CONFIG_MEF_CFG
+#if CONFIG_MEF_CFG
 extern wlan_flt_cfg_t g_flt_cfg;
 #endif
 
@@ -4556,7 +5150,7 @@ static void test_wlan_host_sleep(int argc, char **argv)
     }
     else if (choice == 1)
     {
-#ifdef CONFIG_MEF_CFG
+#if CONFIG_MEF_CFG
         if (argc < 3)
 #else
         if (argc < 4)
@@ -4585,7 +5179,7 @@ static void test_wlan_host_sleep(int argc, char **argv)
                 (void)PRINTF("Failed to host sleep configuration, error: %d", ret);
             }
         }
-#ifdef CONFIG_MEF_CFG
+#if CONFIG_MEF_CFG
         else if (string_equal(argv[2], "mef"))
         {
             ret = wlan_send_host_sleep(HOST_SLEEP_NO_COND);
@@ -4619,7 +5213,7 @@ static void test_wlan_host_sleep(int argc, char **argv)
         (void)PRINTF("	       bit 6: WAKE_ON_MGMT_FRAME\r\n");
         (void)PRINTF("	       All bit 0 discard and not wakeup host\r\n");
         (void)PRINTF("	       All bit 1 cancel host sleep configuration\r\n");
-#ifdef CONFIG_MEF_CFG
+#if CONFIG_MEF_CFG
         (void)PRINTF("    mef     -- MEF host wakeup\r\n");
         (void)PRINTF("Example:\r\n");
         (void)PRINTF("    wlan-host-sleep <1/0> mef\r\n");
@@ -4632,7 +5226,51 @@ static void test_wlan_host_sleep(int argc, char **argv)
 #endif
 
 #ifdef RW610
-#if !defined(CONFIG_WIFI_BLE_COEX_APP)
+#if !(CONFIG_WIFI_BLE_COEX_APP)
+#ifdef __ZEPHYR__
+static void test_wlan_auto_host_sleep(int argc, char **argv)
+{
+    bool is_manual   = MFALSE;
+    t_u8 is_periodic = 0;
+    t_u8 enable      = 0;
+
+    if (argc > 3 || argc < 2)
+    {
+        (void)PRINTF("Error: invalid number of arguments\r\n");
+        (void)PRINTF("Usage:\r\n");
+        (void)PRINTF("    wlan-auto-host-sleep <enable> <periodic>\r\n");
+        (void)PRINTF("    enable      -- enable/disable host sleep\r\n");
+        (void)PRINTF("                   0 - disable host sleep\r\n");
+        (void)PRINTF("                   1 - enable host sleep\r\n");
+        (void)PRINTF("    periodic    -- Host enter low power periodically or oneshot\r\n");
+        (void)PRINTF(
+            "                            0 - Oneshot. Host will enter low power only once and keep full power after "
+            "waking "
+            "up.\r\n");
+        (void)PRINTF("                   1 - Periodic. Host will enter low power periodically.\r\n");
+        (void)PRINTF("Examples:\r\n");
+        (void)PRINTF("    wlan-auto-host-sleep 1 1\r\n");
+        (void)PRINTF("    wlan-auto-host-sleep 0\r\n");
+        return;
+    }
+    enable = (t_u8)atoi(argv[1]);
+    if (enable != 0 && enable != 1)
+    {
+        (void)PRINTF("Error! Invalid input of parameter <enable>\r\n");
+        return;
+    }
+    /* Disable auto host sleep */
+    if (enable == 0)
+    {
+        wlan_cancel_host_sleep();
+        wlan_clear_host_sleep_config();
+        (void)PRINTF("Auto Host Sleep disabled\r\n");
+        return;
+    }
+    is_periodic = (t_u8)atoi(argv[2]);
+    wlan_config_host_sleep(is_manual, is_periodic);
+}
+#else
 static void test_wlan_auto_host_sleep(int argc, char **argv)
 {
     bool is_manual    = MFALSE;
@@ -4717,7 +5355,7 @@ static void test_wlan_auto_host_sleep(int argc, char **argv)
 static void test_wlan_ns_offload(int argc, char **argv)
 {
     int ret = -WM_FAIL;
-    ret = wlan_set_ipv6_ns_offload();
+    ret     = wlan_set_ipv6_ns_offload();
     if (ret == WM_SUCCESS)
     {
         (void)PRINTF("Enabled  wlan IPv6 NS offload feature");
@@ -4731,14 +5369,101 @@ static void test_wlan_ns_offload(int argc, char **argv)
 static void test_wlan_auto_arp(int argc, char **argv)
 {
     int ret = -WM_FAIL;
-    ret = wlan_set_auto_arp();
+    ret     = wlan_set_auto_arp();
     if (ret == WM_SUCCESS)
         (void)PRINTF("Enabled  wlan auto arp offload feature\r\n");
     else
         (void)PRINTF("Failed to enabled wlan auto arp offload, error: %d\r\n", ret);
 }
 
-#ifdef CONFIG_MEF_CFG
+#if CONFIG_MEF_CFG
+static void dump_wlan_add_packet_filter()
+{
+    (void)PRINTF("Usage:\r\n");
+    (void)PRINTF("For wowlan Add packet filter\r\n");
+    (void)PRINTF("wowlan magic filter:\r\n");
+    (void)PRINTF("wlan_add_packet_filter 1:\r\n");
+    (void)PRINTF("wowlan User defined pattren packet filter:\r\n");
+    (void)PRINTF("wlan_add_packet_filter 0 <number of patterns> <ptn_len> <pkt_offset> <ptn> ........:\r\n");
+    (void)PRINTF(
+        "For 2 number of patterns Usage \r\nwlan_add_packet_filter 0 2 6 0 0xff 0xff 0xff 0xff 0xff 0xff 4 20 192 168 "
+        "10 1\r\n");
+    (void)PRINTF("wowlan User defined pattren and magic packet filter:\r\n");
+    (void)PRINTF("wlan_add_packet_filter 1 <number of patterns> <ptn_len> <pkt_offset> <ptn> ........:\r\n");
+    (void)PRINTF(
+        "For 2 number of patterns Usage \r\nwlan_add_packet_filter 1 2 6 0 0xff 0xff 0xff 0xff 0xff 0xff 4 20 192 168 "
+        "10 1\r\n");
+}
+
+static void test_wlan_add_packet_filter(int argc, char **argv)
+{
+    int ret = -WM_FAIL;
+    t_u8 i = 0, j = 0, k = 0;
+    wlan_wowlan_ptn_cfg_t wowlan_ptn_cfg;
+    if (argc < 2)
+    {
+        (void)PRINTF("Usage: %s <0/1>\r\n", argv[0]);
+        (void)PRINTF("Error: Specify 1 to magic filter\r\n");
+        dump_wlan_add_packet_filter();
+        return;
+    }
+    if (argc > 3 && atoi(argv[2]) != argc - 3)
+    {
+        (void)PRINTF("Usage: %s 0/1 <patterns number> <ptn_len> <pkt_offset> <ptn> ...........\r\n", argv[0]);
+        dump_wlan_add_packet_filter();
+        return;
+    }
+    (void)memset(&wowlan_ptn_cfg, 0, sizeof(wlan_wowlan_ptn_cfg_t));
+    wowlan_ptn_cfg.enable = atoi(argv[1]);
+    if (argc > 2)
+    {
+        wowlan_ptn_cfg.n_patterns = atoi(argv[2]);
+        for (i = 0, k = 0; (i + 3 < argc) && k < MAX_NUM_FILTERS; k++)
+        {
+            wowlan_ptn_cfg.patterns[k].pattern_len = atoi(argv[i + 3]);
+            i++;
+            wowlan_ptn_cfg.patterns[k].pkt_offset = atoi(argv[i + 3]);
+            i++;
+            for (j = 0; j < wowlan_ptn_cfg.patterns[k].pattern_len; j++)
+                wowlan_ptn_cfg.patterns[k].pattern[j] = atoi(argv[j + i + 3]);
+            i = +j;
+            (void)memset(wowlan_ptn_cfg.patterns[k].mask, 0x3f, 6);
+        }
+    }
+    ret = wlan_wowlan_cfg_ptn_match(&wowlan_ptn_cfg);
+    if (ret == WM_SUCCESS)
+        (void)PRINTF("Enabled pkt filter offload feature");
+    else
+        (void)PRINTF("Failed to enabled magic pkt filter offload, error: %d", ret);
+}
+#endif /* CONFIG_MEF_CFG */
+#endif /*RW610*/
+#else
+static void test_wlan_ns_offload(int argc, char **argv)
+{
+    int ret = -WM_FAIL;
+    ret     = wlan_set_ipv6_ns_offload();
+    if (ret == WM_SUCCESS)
+    {
+        (void)PRINTF("Enabled  wlan IPv6 NS offload feature");
+    }
+    else
+    {
+        (void)PRINTF("Failed to enabled wlan auto arp offload, error: %d", ret);
+    }
+}
+
+static void test_wlan_auto_arp(int argc, char **argv)
+{
+    int ret = -WM_FAIL;
+    ret     = wlan_set_auto_arp();
+    if (ret == WM_SUCCESS)
+        (void)PRINTF("Enabled  wlan auto arp offload feature\r\n");
+    else
+        (void)PRINTF("Failed to enabled wlan auto arp offload, error: %d\r\n", ret);
+}
+
+#if CONFIG_MEF_CFG
 static void dump_wlan_add_packet_filter()
 {
     (void)PRINTF("Usage:\r\n");
@@ -4802,8 +5527,13 @@ static void test_wlan_add_packet_filter(int argc, char **argv)
 #endif /*RW610*/
 #endif /* CONFIG_HOST_SLEEP */
 
+#if CONFIG_SEND_HOSTCMD
 #define HOSTCMD_RESP_BUFF_SIZE 1024
-static uint8_t host_cmd_resp_buf[HOSTCMD_RESP_BUFF_SIZE] = {0};
+#if defined(CPU_MIMXRT1176DVMAA_cm7) && defined(SD9177)
+    static uint8_t __attribute__((section(".wlan_data"))) host_cmd_resp_buf[HOSTCMD_RESP_BUFF_SIZE] = {0};
+#else
+    static uint8_t host_cmd_resp_buf[HOSTCMD_RESP_BUFF_SIZE] = {0};
+#endif
 /* Command taken from robust_btc.conf*/
 static uint8_t host_cmd_buf[] = {0xe0, 0, 0x12, 0, 0x3c, 0, 0, 0, 0x01, 0, 0, 0, 0x38, 0x02, 0x02, 0, 0x07, 0x01};
 
@@ -4829,8 +5559,9 @@ static void test_wlan_send_hostcmd(int argc, char **argv)
         (void)PRINTF("Hostcmd failed error: %d", ret);
     }
 }
+#endif
 
-#if defined(RW610) || defined(SD9177)
+#if defined(RW610) || defined(SD9177) || defined(IW610)
 static void test_wlan_ext_coex_uwb_usage(void)
 {
     (void)PRINTF("Usage:\r\n");
@@ -4846,9 +5577,9 @@ static void test_wlan_ext_coex_uwb(int argc, char **argv)
     int ret           = -WM_FAIL;
     uint32_t reqd_len = 0;
 
-    u8_t cmd_buf[]    = {0xe0, 0x00, 0x11, 0x00, 0x4a, 0x00, 0x00, 0x00, 0x01 /* Get/Set */,
-                      0x00, 0x00, 0x00, 0x38, 0x02, 0x01, 0x00, 0x03};
-    u8_t resp_buf[64] = {0};
+    t_u8 cmd_buf[]    = {0xe0, 0x00, 0x11, 0x00, 0x4a, 0x00, 0x00, 0x00, 0x01 /* Get/Set */,
+                         0x00, 0x00, 0x00, 0x38, 0x02, 0x01, 0x00, 0x03};
+    t_u8 resp_buf[64] = {0};
 
     /**
      * Command taken from robust_btc.conf
@@ -4870,7 +5601,7 @@ static void test_wlan_ext_coex_uwb(int argc, char **argv)
         return;
     }
 
-    ret = wlan_send_hostcmd(cmd_buf, sizeof(cmd_buf) / sizeof(u8_t), resp_buf, sizeof(resp_buf), &reqd_len);
+    ret = wlan_send_hostcmd(cmd_buf, sizeof(cmd_buf) / sizeof(t_u8), resp_buf, sizeof(resp_buf), &reqd_len);
 
     if (ret == WM_SUCCESS)
     {
@@ -4934,6 +5665,7 @@ static void test_wlan_8801_ext_coex_stats(int argc, char **argv)
 }
 #endif
 
+#if UAP_SUPPORT
 #if !defined(SD8801) && !defined(RW610)
 static void test_wlan_set_uap_bandwidth(int argc, char **argv)
 {
@@ -4942,7 +5674,7 @@ static void test_wlan_set_uap_bandwidth(int argc, char **argv)
 
     if (argc < 2)
     {
-#ifdef CONFIG_11AC
+#if CONFIG_11AC
         (void)PRINTF("Usage: %s <1/2/3>\r\n", argv[0]);
         (void)PRINTF("Error: Specify 1 to set bandwidth 20MHz or 2 for 40MHz or 3 for 80MHz\r\n");
 #else
@@ -4964,7 +5696,7 @@ static void test_wlan_set_uap_bandwidth(int argc, char **argv)
 
     if (ret != WM_SUCCESS)
     {
-#ifdef CONFIG_11AC
+#if CONFIG_11AC
         (void)PRINTF("Usage: %s <1/2/3>\r\n", argv[0]);
         (void)PRINTF("Error: Specify 1 to set bandwidth 20MHz or 2 for 40MHz or 3 for 80MHz\r\n");
 #else
@@ -5018,8 +5750,9 @@ static void test_wlan_set_uap_hidden_ssid(int argc, char **argv)
         (void)PRINTF("SSID broadcast control set successfully\r\n");
     }
 }
+#endif /* UAP_SUPPORT */
 
-#ifdef CONFIG_WIFI_MEM_ACCESS
+#if CONFIG_WIFI_MEM_ACCESS
 static void dump_wlan_mem_access_usage(void)
 {
     (void)PRINTF("Usage:\r\n");
@@ -5085,7 +5818,7 @@ static void test_wlan_mem_access(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_WIFI_BOOT_SLEEP
+#if CONFIG_WIFI_BOOT_SLEEP
 static void dump_wlan_boot_sleep_usage(void)
 {
     (void)PRINTF("Usage:\r\n");
@@ -5131,7 +5864,7 @@ static void test_wlan_boot_sleep(int argc, char **argv)
 }
 #endif
 
-#if defined(CONFIG_11R)
+#if (CONFIG_11R)
 static void dump_wlan_ft_roam_usage(void)
 {
     (void)PRINTF("Usage:\r\n");
@@ -5177,89 +5910,14 @@ static void test_wlan_ft_roam(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_HEAP_STAT
+#if CONFIG_HEAP_STAT
 static void test_heap_stat(int argc, char **argv)
 {
-    os_dump_mem_stats();
+    OSA_DumpMemStats();
 }
 #endif
 
-#ifdef CONFIG_EU_VALIDATION
-static void dump_wlan_eu_validation(void)
-{
-    (void)PRINTF("Usage:\r\n");
-    (void)PRINTF("wlan-eu-validation <value>\r\n");
-    (void)PRINTF("Values to choose:\r\n");
-    (void)PRINTF("     0x05   GCMP_128_ENC\r\n");
-    (void)PRINTF("     0x06   GCMP_128_DEC\r\n");
-    (void)PRINTF("     0x07   GCMP_256_ENC\r\n");
-    (void)PRINTF("     0x08   GCMP_256_DEC\r\n");
-    (void)PRINTF("     0x09   DUMMY_PAYLOAD\r\n");
-    (void)PRINTF("     0x0a   CRYPTO\r\n");
-    (void)PRINTF("     0x0b   CRYPTO_LARGE_PAYLOAD\r\n");
-    (void)PRINTF("     0x0c   CRYPTO_CCMP_128_ENC\r\n");
-    (void)PRINTF("     0x0d   CRYPTO_CCMP_128_DEC\r\n");
-    (void)PRINTF("     0x0e   CRYPTO_CCMP_256_ENC\r\n");
-    (void)PRINTF("     0x0f   CRYPTO_CCMP_256_DEC\r\n");
-    (void)PRINTF("     0x10   CRYPTO_CCMP_128_MGMT_ENC\r\n");
-    (void)PRINTF("     0x11   CRYPTO_CCMP_128_MGMT_DEC\r\n");
-    (void)PRINTF("     0x12   GCMP_256_ENC_FIPS\r\n");
-    (void)PRINTF("     0x13   GCMP_256_DEC_FIPS\r\n");
-    (void)PRINTF("     0x14   GCMP_128_ENC_FIPS\r\n");
-    (void)PRINTF("     0x15   GCMP_128_DEC_FIPS\r\n");
-    (void)PRINTF("     0x16   TKIP_ENC_FIPS\r\n");
-    (void)PRINTF("     0x17   TKIP_DEC_FIPS\r\n");
-}
-
-static void test_wlan_eu_validation(int argc, char **argv)
-{
-    uint8_t cmd_eu_buf[] = {0x34, 0x02, 0x0c, 0, 0, 0, 0, 0, 0x04, 0, 0x05, 0};
-    int value;
-    int ret           = -WM_FAIL;
-    uint32_t reqd_len = 0;
-
-    if (argc != 2)
-    {
-        dump_wlan_eu_validation();
-        (void)PRINTF("Error: invalid number of arguments\r\n");
-        return;
-    }
-
-    if (argv[1][0] == '0' && (argv[1][1] == 'x' || argv[1][1] == 'X'))
-        value = a2hex_or_atoi(argv[1]);
-    else
-    {
-        dump_wlan_eu_validation();
-        (void)PRINTF("Error: invalid value format\r\n");
-        return;
-    }
-
-    if (value < 5 || value > 23)
-    {
-        dump_wlan_eu_validation();
-        (void)PRINTF("Error: invalid value\r\n");
-        return;
-    }
-
-    cmd_eu_buf[10] = value;
-
-    ret = wlan_send_hostcmd(cmd_eu_buf, sizeof(cmd_eu_buf) / sizeof(uint8_t), host_cmd_resp_buf, HOSTCMD_RESP_BUFF_SIZE,
-                            &reqd_len);
-    if (ret == WM_SUCCESS)
-    {
-        (void)PRINTF("Hostcmd success, response is:\r\n");
-        for (ret = 0; ret < reqd_len; ret++)
-        {
-            (void)PRINTF("%x\t", host_cmd_resp_buf[ret]);
-            host_cmd_resp_buf[ret] = 0;
-        }
-    }
-    else
-        (void)PRINTF("Hostcmd failed error: %d", ret);
-}
-#endif /* CONFIG_EU_VALIDATION */
-
-#ifdef CONFIG_WIFI_EU_CRYPTO
+#if CONFIG_WIFI_EU_CRYPTO
 static void dump_wlan_eu_crypto_rc4(void)
 {
     (void)PRINTF("Usage:\r\n");
@@ -5526,7 +6184,7 @@ static void test_wlan_eu_crypto_ccmp_128(int argc, char **argv)
     t_u8 Nonce[13]   = {0x00, 0x50, 0x30, 0xf1, 0x84, 0x44, 0x08, 0xb5, 0x03, 0x97, 0x76, 0xe7, 0x0c};
     NonceLength      = 13;
     t_u8 AAD[22]     = {0x08, 0x40, 0x0f, 0xd2, 0xe1, 0x28, 0xa5, 0x7c, 0x50, 0x30, 0xf1,
-                    0x84, 0x44, 0x08, 0xab, 0xae, 0xa5, 0xb8, 0xfc, 0xba, 0x00, 0x00};
+                        0x84, 0x44, 0x08, 0xab, 0xae, 0xa5, 0xb8, 0xfc, 0xba, 0x00, 0x00};
     AADLength        = 22;
 
     if (EncDec == 0U)
@@ -5562,7 +6220,7 @@ static void test_wlan_eu_crypto_ccmp_128(int argc, char **argv)
         (void)PRINTF("Hostcmd failed error: %d", ret);
     }
 }
-
+#if !defined(SD8978)
 static void dump_wlan_eu_crypto_ccmp_256(void)
 {
     (void)PRINTF("Usage:\r\n");
@@ -5596,7 +6254,7 @@ static void test_wlan_eu_crypto_ccmp_256(int argc, char **argv)
     }
     /*Algorithm: AES_WRAP*/
     t_u8 Key[32]     = {0xc9, 0x7c, 0x1f, 0x67, 0xce, 0x37, 0x11, 0x85, 0x51, 0x4a, 0x8a, 0x19, 0xf2, 0xbd, 0xd5, 0x2f,
-                    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f};
+                        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f};
     KeyLength        = 32;
     t_u8 EncData[20] = {0xf8, 0xba, 0x1a, 0x55, 0xd0, 0x2f, 0x85, 0xae, 0x96, 0x7b,
                         0xb6, 0x2f, 0xb6, 0xcd, 0xa8, 0xeb, 0x7e, 0x78, 0xa0, 0x50};
@@ -5608,7 +6266,7 @@ static void test_wlan_eu_crypto_ccmp_256(int argc, char **argv)
     t_u8 Nonce[13]   = {0x00, 0x50, 0x30, 0xf1, 0x84, 0x44, 0x08, 0xb5, 0x03, 0x97, 0x76, 0xe7, 0x0c};
     NonceLength      = 13;
     t_u8 AAD[22]     = {0x08, 0x40, 0x0f, 0xd2, 0xe1, 0x28, 0xa5, 0x7c, 0x50, 0x30, 0xf1,
-                    0x84, 0x44, 0x08, 0xab, 0xae, 0xa5, 0xb8, 0xfc, 0xba, 0x00, 0x00};
+                        0x84, 0x44, 0x08, 0xab, 0xae, 0xa5, 0xb8, 0xfc, 0xba, 0x00, 0x00};
     AADLength        = 22;
 
     if (EncDec == 0U)
@@ -5644,7 +6302,6 @@ static void test_wlan_eu_crypto_ccmp_256(int argc, char **argv)
         (void)PRINTF("Hostcmd failed error: %d", ret);
     }
 }
-
 static void dump_wlan_eu_crypto_gcmp_128(void)
 {
     (void)PRINTF("Usage:\r\n");
@@ -5689,7 +6346,7 @@ static void test_wlan_eu_crypto_gcmp_128(int argc, char **argv)
                             0x5b, 0xf0, 0x8b, 0x80, 0x74, 0x42, 0x64, 0x0a, 0x15, 0x96, 0xe5, 0xdb, 0xda, 0xd4,
                             0x1d, 0x1f, 0x36, 0x23, 0xf4, 0x5d, 0x7a, 0x12, 0xdb, 0x7a, 0xfb, 0x23};
     Dec_DataOnlyLength   = 40;
-#if defined(SD9177) || defined(RW610)
+#if defined(SD9177) || defined(RW610) || defined(IW610)
     t_u8 DecTag[16] = {0xde, 0xf6, 0x19, 0xc2, 0xa3, 0x74, 0xb6, 0xdf, 0x66, 0xff, 0xa5, 0x3b, 0x6c, 0x69, 0xd7, 0x9e};
 #else
     t_u8 DecTag[16] = {0xe9, 0x04, 0x97, 0xa1, 0xec, 0x9c, 0x5e, 0x8b, 0x85, 0x5b, 0x9d, 0xc3, 0xa8, 0x16, 0x91, 0xa3};
@@ -5704,7 +6361,7 @@ static void test_wlan_eu_crypto_gcmp_128(int argc, char **argv)
     t_u8 Nonce[12] = {0x50, 0x30, 0xf1, 0x84, 0x44, 0x08, 0x00, 0x89, 0x5f, 0x5f, 0x2b, 0x08};
     NonceLength    = 12;
     t_u8 AAD[24]   = {0x88, 0x48, 0x0f, 0xd2, 0xe1, 0x28, 0xa5, 0x7c, 0x50, 0x30, 0xf1, 0x84,
-                    0x44, 0x08, 0x50, 0x30, 0xf1, 0x84, 0x44, 0x08, 0x80, 0x33, 0x03, 0x00};
+                      0x44, 0x08, 0x50, 0x30, 0xf1, 0x84, 0x44, 0x08, 0x80, 0x33, 0x03, 0x00};
     AADLength      = 24;
 
     if (EncDec == 0U)
@@ -5740,7 +6397,6 @@ static void test_wlan_eu_crypto_gcmp_128(int argc, char **argv)
         (void)PRINTF("Hostcmd failed error: %d", ret);
     }
 }
-
 static void dump_wlan_eu_crypto_gcmp_256(void)
 {
     (void)PRINTF("Usage:\r\n");
@@ -5776,7 +6432,7 @@ static void test_wlan_eu_crypto_gcmp_256(int argc, char **argv)
     }
     /*Algorithm: AES_WRAP*/
     t_u8 Key[32]     = {0xc9, 0x7c, 0x1f, 0x67, 0xce, 0x37, 0x11, 0x85, 0x51, 0x4a, 0x8a, 0x19, 0xf2, 0xbd, 0xd5, 0x2f,
-                    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f};
+                        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f};
     KeyLength        = 32;
     t_u8 EncData[40] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
                         0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b,
@@ -5788,7 +6444,7 @@ static void test_wlan_eu_crypto_gcmp_256(int argc, char **argv)
                             0x5a, 0x8b, 0xe7, 0x79, 0xb2, 0x12, 0x66, 0x55, 0x5e, 0x70, 0xad, 0x79};
     Dec_DataOnlyLength   = 40;
 
-#if defined(SD9177) || defined(RW610)
+#if defined(SD9177) || defined(RW610) || defined(IW610)
     t_u8 DecTag[16] = {0x11, 0x43, 0x16, 0x85, 0x90, 0x95, 0x47, 0x3d, 0x5b, 0x1b, 0xd5, 0x96, 0xb3, 0xde, 0xa3, 0xbf};
 #else
     t_u8 DecTag[16] = {0x11, 0x53, 0x9a, 0x0e, 0x22, 0xc1, 0x26, 0x0c, 0xbb, 0xe8, 0x35, 0x93, 0x35, 0xf3, 0x37, 0x65};
@@ -5803,7 +6459,7 @@ static void test_wlan_eu_crypto_gcmp_256(int argc, char **argv)
     t_u8 Nonce[12] = {0x50, 0x30, 0xf1, 0x84, 0x44, 0x08, 0x00, 0x89, 0x5f, 0x5f, 0x2b, 0x08};
     NonceLength    = 12;
     t_u8 AAD[24]   = {0x88, 0x48, 0x0f, 0xd2, 0xe1, 0x28, 0xa5, 0x7c, 0x50, 0x30, 0xf1, 0x84,
-                    0x44, 0x08, 0x50, 0x30, 0xf1, 0x84, 0x44, 0x08, 0x80, 0x33, 0x03, 0x00};
+                      0x44, 0x08, 0x50, 0x30, 0xf1, 0x84, 0x44, 0x08, 0x80, 0x33, 0x03, 0x00};
     AADLength      = 24;
 
     if (EncDec == 0U)
@@ -5840,8 +6496,8 @@ static void test_wlan_eu_crypto_gcmp_256(int argc, char **argv)
     }
 }
 #endif
-
-#ifdef CONFIG_HEAP_DEBUG
+#endif
+#if CONFIG_HEAP_DEBUG
 int os_mem_alloc_cnt = 0;
 int os_mem_free_cnt  = 0;
 
@@ -5854,7 +6510,7 @@ static void test_wlan_os_mem_stat(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_RX_ABORT_CFG
+#if CONFIG_RX_ABORT_CFG
 static void dump_wlan_rx_abort_cfg_usage()
 {
     (void)PRINTF("Usage:\r\n");
@@ -5923,8 +6579,7 @@ static void test_wlan_rx_abort_cfg(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_RX_ABORT_CFG_EXT
-int rx_abort_cfg_ext_enable = 0;
+#if CONFIG_RX_ABORT_CFG_EXT
 static void dump_wlan_rx_abort_cfg_ext_usage()
 {
     (void)PRINTF("Usage:\r\n");
@@ -5969,37 +6624,54 @@ static void dump_wlan_rx_abort_cfg_ext_usage()
 
 static void test_wlan_get_rx_abort_cfg_ext(int argc, char **argv)
 {
-    struct wlan_rx_abort_cfg_ext cfg;
-    (void)memset(&cfg, 0, sizeof(cfg));
+#if !CONFIG_MEM_POOLS
+    struct wlan_rx_abort_cfg_ext *cfg =
+           (struct wlan_rx_abort_cfg_ext *)OSA_MemoryAllocate(sizeof(struct wlan_rx_abort_cfg_ext));
+#else
+    struct wlan_rx_abort_cfg_ext *cfg =
+           (struct wlan_rx_abort_cfg_ext *)OSA_MemoryPoolAllocate(buf_32_MemoryPool);
+#endif
+    if(cfg == NULL)
+    {
+         (void)PRINTF("test_wlan_get_rx_abort_cfg_ext malloc fail! \r\n");
+         return;
+    }
+    (void)memset(cfg, 0, sizeof(*cfg));
 
-    wlan_get_rx_abort_cfg_ext(&cfg);
+    wlan_get_rx_abort_cfg_ext(cfg);
 
-    (void)PRINTF("Dynamic Rx Abort %s\r\n", rx_abort_cfg_ext_enable == 1 ? "enabled" : "disabled");
-    if (rx_abort_cfg_ext_enable == 1)
+    (void)PRINTF("Dynamic Rx Abort %s\r\n", cfg->enable == 1 ? "enabled" : "disabled");
+    if (cfg->enable == 1)
     {
         int rssi;
-        rssi = cfg.rssi_margin;
+        rssi = cfg->rssi_margin;
         if (rssi > 0x7f)
             rssi = -(256 - rssi);
         (void)PRINTF("Margin RSSI: %s%d dbm\r\n", ((rssi > 0) ? "-" : ""), rssi);
 
-        rssi = cfg.ceil_rssi_threshold;
+        rssi = cfg->ceil_rssi_threshold;
         if (rssi > 0x7f)
             rssi = -(256 - rssi);
         (void)PRINTF("Ceil RSSI threshold: %s%d dbm\r\n", ((rssi > 0) ? "-" : ""), rssi);
 
-        rssi = cfg.floor_rssi_threshold;
+        rssi = cfg->floor_rssi_threshold;
         if (rssi > 0x7f)
             rssi = -(256 - rssi);
         (void)PRINTF("Floor rssi threshold: %s%d dbm\r\n", ((rssi > 0) ? "-" : ""), rssi);
 
-        rssi = cfg.current_dynamic_rssi_threshold;
+        rssi = cfg->current_dynamic_rssi_threshold;
         if (rssi > 0x7f)
             rssi = -(256 - rssi);
         (void)PRINTF("Dynamic RSSI Threshold : %d dbm (%s)\r\n", rssi,
-                     cfg.rssi_default_config ? (cfg.edmac_enable ? "EDMAC based" : "Default") : "Config based");
+                     cfg->rssi_default_config ? (cfg->edmac_enable ? "EDMAC based" : "Default") : "Config based");
     }
     (void)PRINTF("\r\n");
+#if !CONFIG_MEM_POOLS
+    OSA_MemoryFree(cfg);
+#else
+    OSA_MemoryPoolFree(buf_32_MemoryPool, cfg);
+#endif
+
     return;
 }
 
@@ -6046,14 +6718,12 @@ static void test_wlan_set_rx_abort_cfg_ext(int argc, char **argv)
             }
             if (value == 0) /*Disable dynamic rx bort config*/
             {
-                cfg.enable              = 0;
-                rx_abort_cfg_ext_enable = 0;
+                cfg.enable = 0;
                 break;
             }
             else /* Enable dynamic rx abort config*/
             {
-                cfg.enable              = 1;
-                rx_abort_cfg_ext_enable = 1;
+                cfg.enable = 1;
             }
             arg += 2;
             info.enable = 1;
@@ -6162,7 +6832,7 @@ static void test_wlan_set_rx_abort_cfg_ext(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_CCK_DESENSE_CFG
+#if CONFIG_CCK_DESENSE_CFG
 static void dump_wlan_cck_desense_cfg_usage()
 {
     (void)PRINTF("Usage:\r\n");
@@ -6283,7 +6953,7 @@ static void test_wlan_cck_desense_cfg(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_MULTI_CHAN
+#if CONFIG_MULTI_CHAN
 static void test_wlan_set_multi_chan_status(int argc, char **argv)
 {
     int ret;
@@ -6432,21 +7102,42 @@ static void test_wlan_get_drcs_cfg(int argc, char **argv)
 }
 #endif
 
-#ifndef STREAM_2X2
 static void dump_wlan_set_antcfg_usage(void)
 {
     (void)PRINTF("Usage:\r\n");
+#ifndef RW610
     (void)PRINTF("wlan-set-antcfg <ant mode> [evaluate_time] \r\n");
+#else
+    (void)PRINTF("wlan-set-antcfg <ant_mode> <evaluate_time> <evaluate_mode>\r\n");
+#endif
     (void)PRINTF("\r\n");
-    (void)PRINTF("\t<ant mode>: \r\n");
-    (void)PRINTF("\t           Bit 0   -- Tx/Rx antenna 1\r\n");
-    (void)PRINTF("\t           Bit 1   -- Tx/Rx antenna 2\r\n");
+    (void)PRINTF("\t<ant_mode>: \r\n");
+    (void)PRINTF("\t           1   -- Tx/Rx antenna 1\r\n");
+    (void)PRINTF("\t           2   -- Tx/Rx antenna 2\r\n");
     (void)PRINTF("\t           0xFFFF  -- Tx/Rx antenna diversity\r\n");
     (void)PRINTF("\t[evaluate_time]: \r\n");
-    (void)PRINTF("\t           if ant mode = 0xFFFF, SAD evaluate time interval,\r\n");
-    (void)PRINTF("\t           default value is 6000 milli seconds\r\n");
+    (void)PRINTF("\t           If ant mode = 0xFFFF, use this to configure\r\n");
+    (void)PRINTF("\t           SAD evaluate time interval in milli seconds unit.\r\n");
+    (void)PRINTF("\t           MAX evaluate time is 65535ms.\r\n");
+    (void)PRINTF("\t           If not specified, default value is 6000 milli seconds.\r\n");
+#ifdef RW610
+    (void)PRINTF("\t<evaluate_mode>: \r\n");
+    (void)PRINTF("\t           0: Ant1 + Ant2\r\n");
+    (void)PRINTF("\t           1: Ant2 + Ant3\r\n");
+    (void)PRINTF("\t           2: Ant1 + Ant3\r\n");
+    (void)PRINTF("\t           255: invalid evaluate mode\r\n");
+    (void)PRINTF("\t           If not used, just keep this field empty.\r\n");
+#endif
+    (void)PRINTF("Examples:\r\n");
+    (void)PRINTF("wlan-set-antcfg 1\r\n");
+    (void)PRINTF("wlan-set-antcfg 0xffff\r\n");
+    (void)PRINTF("wlan-set-antcfg 0xffff 5000\r\n");
+#ifdef RW610
+    (void)PRINTF("wlan-set-antcfg 0xffff 6000 0\r\n");
+#endif
 }
 
+#ifndef RW610
 static void wlan_antcfg_set(int argc, char *argv[])
 {
     int ret;
@@ -6495,6 +7186,79 @@ static void wlan_antcfg_set(int argc, char *argv[])
         dump_wlan_set_antcfg_usage();
     }
 }
+#else
+static void wlan_antcfg_set(int argc, char *argv[])
+{
+    int ret;
+    uint32_t ant_mode;
+    uint16_t evaluate_time = 0;
+    uint8_t evaluate_mode  = 0xFF;
+
+    if (argc < 2 || argc > 4)
+    {
+        dump_wlan_set_antcfg_usage();
+        (void)PRINTF("Error: invalid number of arguments\r\n");
+        return;
+    }
+
+    errno    = 0;
+    ant_mode = (uint32_t)strtol(argv[1], NULL, 16);
+    if (errno != 0)
+    {
+        (void)PRINTF("Error during strtol errno:%d", errno);
+        return;
+    }
+
+    if ((argc == 3 || argc == 4) && (ant_mode != 0xFFFFU))
+    {
+        dump_wlan_set_antcfg_usage();
+        (void)PRINTF("Error: invalid ant_mode\r\n");
+        return;
+    }
+
+    errno = 0;
+    if (argc == 3 || argc == 4)
+    {
+        evaluate_time = (uint16_t)strtol(argv[2], NULL, 10);
+
+        if (errno != 0)
+        {
+            (void)PRINTF("Error during strtol errno:%d", errno);
+            return;
+        }
+    }
+
+    errno = 0;
+    if (argc == 4)
+    {
+        evaluate_mode = (uint8_t)strtol(argv[3], NULL, 10);
+
+        if (errno != 0)
+        {
+            (void)PRINTF("Error during strtol errno:%d", errno);
+            return;
+        }
+
+        if ((evaluate_mode != 0) && (evaluate_mode != 1) && (evaluate_mode != 2) && (evaluate_mode != 255))
+        {
+            dump_wlan_set_antcfg_usage();
+            (void)PRINTF("Error: invalid evaluate_mode\r\n");
+            return;
+        }
+    }
+
+    ret = wlan_set_antcfg(ant_mode, evaluate_time, evaluate_mode);
+    if (ret == WM_SUCCESS)
+    {
+        (void)PRINTF("Antenna configuration successful\r\n");
+    }
+    else
+    {
+        (void)PRINTF("Antenna configuration failed\r\n");
+        dump_wlan_set_antcfg_usage();
+    }
+}
+#endif /*RW610*/
 
 static void dump_wlan_get_antcfg_usage(void)
 {
@@ -6504,9 +7268,12 @@ static void dump_wlan_get_antcfg_usage(void)
 
 static void wlan_antcfg_get(int argc, char *argv[])
 {
-    int ret                  = -WM_FAIL;
-    uint32_t ant_mode        = 0;
-    uint16_t evaluate_time   = 0;
+    int ret                = -WM_FAIL;
+    uint32_t ant_mode      = 0;
+    uint16_t evaluate_time = 0;
+#ifdef RW610
+    uint8_t evaluate_mode = 0;
+#endif
     uint16_t current_antenna = 0;
 
     if (argc != 1)
@@ -6515,17 +7282,31 @@ static void wlan_antcfg_get(int argc, char *argv[])
         return;
     }
 
+#ifndef RW610
     ret = wlan_get_antcfg(&ant_mode, &evaluate_time, &current_antenna);
+#else
+    ret               = wlan_get_antcfg(&ant_mode, &evaluate_time, &evaluate_mode, &current_antenna);
+#endif
     if (ret == WM_SUCCESS)
     {
         (void)PRINTF("Mode of Tx/Rx path is : %x\r\n", ant_mode);
         if (ant_mode == 0XFFFFU)
         {
             (void)PRINTF("Evaluate time : %d\r\n", evaluate_time);
+#ifdef RW610
+            if (evaluate_mode == 0)
+                (void)PRINTF("Evaluate mode : Ant1 + Ant2\r\n");
+            if (evaluate_mode == 1)
+                (void)PRINTF("Evaluate mode : Ant2 + Ant3\r\n");
+            if (evaluate_mode == 2)
+                (void)PRINTF("Evaluate mode : Ant1 + Ant3\r\n");
+            if (evaluate_mode == 0xFF)
+                (void)PRINTF("Default diversity mode.\r\n");
+#endif
         }
         if (current_antenna > 0)
         {
-            (void)PRINTF("Current antenna is %d\n", current_antenna);
+            (void)PRINTF("Current antenna is Ant%d\n", current_antenna);
         }
     }
     else
@@ -6534,9 +7315,8 @@ static void wlan_antcfg_get(int argc, char *argv[])
         dump_wlan_get_antcfg_usage();
     }
 }
-#endif
 
-#ifdef CONFIG_SCAN_CHANNEL_GAP
+#if CONFIG_SCAN_CHANNEL_GAP
 static void test_wlan_set_scan_channel_gap(int argc, char **argv)
 {
     unsigned scan_chan_gap;
@@ -6561,7 +7341,7 @@ static void test_wlan_set_scan_channel_gap(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_WMM
+#if CONFIG_WMM
 static void test_wlan_wmm_tx_stats(int argc, char **argv)
 {
     int bss_type = atoi(argv[1]);
@@ -6570,6 +7350,7 @@ static void test_wlan_wmm_tx_stats(int argc, char **argv)
 }
 #endif
 
+#if defined(RW610)
 static void dump_wlan_set_regioncode_usage(void)
 {
     (void)PRINTF("Usage:\r\n");
@@ -6582,15 +7363,12 @@ static void dump_wlan_set_regioncode_usage(void)
     (void)PRINTF("0x32 : France\r\n");
     (void)PRINTF("0x50 : China\r\n");
     (void)PRINTF("0xFF : Japan\r\n");
-#ifndef CONFIG_MLAN_WMSDK
-    (void)PRINTF("0x40 : Japan\r\n");
-    (void)PRINTF("0x41 : Japan\r\n");
-    (void)PRINTF("0xFE : Japan\r\n");
-#endif
 }
+#endif
 
 static void test_wlan_set_regioncode(int argc, char **argv)
 {
+#if defined(RW610)
     if (argc != 2)
     {
         dump_wlan_set_regioncode_usage();
@@ -6619,6 +7397,10 @@ static void test_wlan_set_regioncode(int argc, char **argv)
     {
         (void)PRINTF("Region code: 0x%x set\r\n", region_code);
     }
+#else
+    (void)PRINTF("Set Region code Feature not supported.\r\n");
+    return;
+#endif
 }
 
 static void test_wlan_get_regioncode(int argc, char **argv)
@@ -6655,7 +7437,8 @@ static void test_wlan_set_mac_address(int argc, char **argv)
     wlan_set_mac_addr(raw_mac);
 }
 
-#if defined(RW610) && defined(CONFIG_WIFI_RESET)
+#if (CONFIG_WIFI_RESET)
+#ifdef RW610
 static void test_wlan_reset(int argc, char **argv)
 {
     int option;
@@ -6669,12 +7452,42 @@ static void test_wlan_reset(int argc, char **argv)
         (void)PRINTF("2 to Reset WiFi\r\n");
         return;
     }
+#if CONFIG_CSI
+    if (option == 2)
+    {
+        (void)memset((void *)&g_csi_params, 0, sizeof(g_csi_params));
+    }
+#endif
+#if CONFIG_NET_MONITOR
+    if (option == 2)
+    {
+        (void)memset((void *)&g_net_monitor_param, 0, sizeof(g_net_monitor_param));
+    }
+#endif
 
     wlan_reset((cli_reset_option)option);
 }
+#else
+static void test_wlan_reset(int argc, char **argv)
+{
+    if (argc > 1)
+    {
+        (void)PRINTF("Usage: %s\r\n", argv[0]);
+        return;
+    }
+#if CONFIG_CSI
+    (void)memset((void *)&g_csi_params, 0, sizeof(g_csi_params));
+#endif
+#if CONFIG_NET_MONITOR
+    (void)memset((void *)&g_net_monitor_param, 0, sizeof(g_net_monitor_param));
 #endif
 
-#ifdef CONFIG_ECSA
+    wlan_reset((cli_reset_option)CLI_RESET_WIFI);
+}
+#endif
+#endif
+
+#if UAP_SUPPORT && CONFIG_ECSA
 static void test_wlan_uap_set_ecsa_cfg(int argc, char **argv)
 {
     int ret;
@@ -6701,7 +7514,9 @@ static void test_wlan_uap_set_ecsa_cfg(int argc, char **argv)
         (void)PRINTF("Error        : invalid number of arguments \r\n");
         (void)PRINTF("Usage        : %s <block_tx> <oper_class> <new_channel> <switch_count> <bandwidth>\r\n", argv[0]);
         (void)PRINTF("block_tx     : 0 -- no need to block traffic, 1 -- need block traffic \r\n");
-        (void)PRINTF("oper_class   : Operating class according to IEEE std802.11 spec \r\n");
+        (void)PRINTF(
+            "oper_class   : Operating class according to IEEE std802.11 spec. when 0 is used, only CSA IE will be "
+            "used\r\n");
         (void)PRINTF("new_channel  : The channel will switch to \r\n");
         (void)PRINTF("switch count : Channel switch time to send ECSA ie \r\n");
         (void)PRINTF("bandwidth    : Channel width switch to(optional),RW610 only support 20M channels \r\n");
@@ -6728,8 +7543,8 @@ static void test_wlan_uap_set_ecsa_cfg(int argc, char **argv)
 }
 #endif /* CONFIG_ECSA */
 
-#ifdef CONFIG_11AX
-#ifdef CONFIG_MMSF
+#if CONFIG_11AX
+#if CONFIG_MMSF
 static void dump_wlan_set_mmsf_usage()
 {
     (void)PRINTF("Usage:\r\n");
@@ -6835,7 +7650,21 @@ static void test_wlan_get_mmsf(int argc, char **argv)
 #endif
 #endif /* CONFIG_11AX */
 
-#ifdef CONFIG_SUBSCRIBE_EVENT_SUPPORT
+#if CONFIG_WIFI_RECOVERY
+static void test_wlan_recovery_test(int argc, char **argv)
+{
+    int ret;
+    ret = wlan_recovery_test();
+
+    if (ret != WM_SUCCESS)
+    {
+        (void)PRINTF("timeout happends.\r\n");
+    }
+    return;
+}
+#endif
+
+#if CONFIG_SUBSCRIBE_EVENT_SUPPORT
 /**
  *  @brief This function print the get subscribe event from firmware for user test.
  */
@@ -7090,7 +7919,7 @@ static void test_wlan_subscribe_event(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_WIFI_REG_ACCESS
+#if CONFIG_WIFI_REG_ACCESS
 static void dump_wlan_reg_access_usage()
 {
     (void)PRINTF("Usage:\r\n");
@@ -7149,7 +7978,7 @@ static void test_wlan_reg_access(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_WMM_UAPSD
+#if CONFIG_WMM_UAPSD
 static void test_wlan_wmm_uapsd_qosinfo(int argc, char **argv)
 {
     unsigned int qos_info = 0xf;
@@ -7161,7 +7990,7 @@ static void test_wlan_wmm_uapsd_qosinfo(int argc, char **argv)
     else if (argc == 2 && !get_uint(argv[1], &qos_info, strlen(argv[1])))
     {
         if (qos_info == 0)
-            (void)PRINTF("qos_info can't be zero\r\n", argv[0]);
+            (void)PRINTF("qos_info can't be zero, input %s\r\n", argv[1]);
         else
             wlan_wmm_uapsd_qosinfo((t_u8 *)&qos_info, 1);
     }
@@ -7206,125 +8035,8 @@ static void test_wlan_sleep_period(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_WIFI_AMPDU_CTRL
-static void dump_wlan_ampdu_enable_usage()
-{
-    (void)PRINTF("Usage:\r\n");
-    (void)PRINTF("wlan-ampdu-enable <sta/uap> <xx: rx:tx bit map. Tx (bit 0), Rx (bit 1> <xx: TID bit map> \r\n");
-    (void)PRINTF("xx: TID bit map\r\n");
-    (void)PRINTF("  1 - TID 0 enable \r\n");
-    (void)PRINTF("  2 - TID 1 enable\r\n");
-    (void)PRINTF("  4 - TID 2 enable\r\n");
-    (void)PRINTF("  7 - TID0, 1, 2 enable\r\n");
-    (void)PRINTF("  ---------\r\n");
-    (void)PRINTF("  255 - TID 0-7 enable \r\n");
-    (void)PRINTF("  0 - Disable ampdu \r\n");
-    (void)PRINTF("Example: disable sta rx/tx ampdu\r\n");
-    (void)PRINTF("  wlan-ampdu-enable sta 3 0\r\n");
-}
 
-static void test_wlan_ampdu_enable(int argc, char **argv)
-{
-    t_u8 tid;
-    t_u8 direction;
-    int bss_type = 0;
-
-    if (argc != 4)
-    {
-        dump_wlan_ampdu_enable_usage();
-        return;
-    }
-
-    if (string_equal("sta", argv[1]))
-        bss_type = MLAN_BSS_TYPE_STA;
-    else if (string_equal("uap", argv[1]))
-        bss_type = MLAN_BSS_TYPE_UAP;
-    else
-    {
-        dump_wlan_ampdu_enable_usage();
-        return;
-    }
-
-    direction = atoi(argv[2]);
-    tid       = atoi(argv[3]);
-
-    if (bss_type == MLAN_BSS_TYPE_STA)
-    {
-        if (is_sta_connected())
-        {
-            (void)PRINTF("Error: configure ampdu control before sta connection!\r\n", argv[0]);
-            return;
-        }
-
-        if (tid)
-        {
-            if (direction & 0x01)
-            {
-                wlan_sta_ampdu_tx_enable();
-                wlan_sta_ampdu_tx_enable_per_tid(tid);
-            }
-
-            if (direction & 0x02)
-            {
-                wlan_sta_ampdu_rx_enable();
-                wlan_sta_ampdu_rx_enable_per_tid(tid);
-            }
-        }
-        else
-        {
-            if (direction & 0x01)
-            {
-                wlan_sta_ampdu_tx_disable();
-                wlan_sta_ampdu_tx_enable_per_tid(tid);
-            }
-
-            if (direction & 0x02)
-            {
-                wlan_sta_ampdu_rx_disable();
-                wlan_sta_ampdu_rx_enable_per_tid(tid);
-            }
-        }
-    }
-    else
-    {
-        if (is_uap_started())
-        {
-            (void)PRINTF("Error: configure ampdu control before uap start!\r\n", argv[0]);
-            return;
-        }
-        if (tid)
-        {
-            if (direction & 0x01)
-            {
-                wlan_uap_ampdu_tx_enable();
-                wlan_uap_ampdu_tx_enable_per_tid(tid);
-            }
-
-            if (direction & 0x02)
-            {
-                wlan_uap_ampdu_rx_enable();
-                wlan_uap_ampdu_rx_enable_per_tid(tid);
-            }
-        }
-        else
-        {
-            if (direction & 0x01)
-            {
-                wlan_uap_ampdu_tx_disable();
-                wlan_uap_ampdu_tx_enable_per_tid(tid);
-            }
-
-            if (direction & 0x02)
-            {
-                wlan_uap_ampdu_rx_disable();
-                wlan_uap_ampdu_rx_enable_per_tid(tid);
-            }
-        }
-    }
-}
-#endif
-
-#ifdef CONFIG_TX_AMPDU_PROT_MODE
+#if CONFIG_TX_AMPDU_PROT_MODE
 static void dump_wlan_tx_ampdu_prot_mode_usage()
 {
     (void)PRINTF("Usage:\r\n");
@@ -7390,7 +8102,7 @@ static void test_wlan_tx_ampdu_prot_mode(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_CSI
+#if CONFIG_CSI
 static void dump_wlan_csi_filter_usage()
 {
     (void)PRINTF("Error: invalid number of arguments\r\n");
@@ -7411,6 +8123,10 @@ static void dump_wlan_csi_filter_usage()
 void dump_csi_param_header()
 {
     (void)PRINTF("\r\nThe current csi_param is: \r\n");
+    if (g_csi_params.bss_type == 0)
+        (void)PRINTF("bss_type      : sta\r\n");
+    else
+        (void)PRINTF("bss_type      : uap\r\n");
     (void)PRINTF("csi_enable    : %d \r\n", g_csi_params.csi_enable);
     (void)PRINTF("head_id       : %d \r\n", g_csi_params.head_id);
     (void)PRINTF("tail_id       : %d \r\n", g_csi_params.tail_id);
@@ -7424,7 +8140,8 @@ void dump_csi_param_header()
     (void)PRINTF("\r\n");
 }
 
-void set_csi_param_header(t_u16 csi_enable,
+void set_csi_param_header(t_u8 bss_type,
+                          t_u16 csi_enable,
                           t_u32 head_id,
                           t_u32 tail_id,
                           t_u8 chip_id,
@@ -7433,6 +8150,7 @@ void set_csi_param_header(t_u16 csi_enable,
                           t_u8 csi_monitor_enable,
                           t_u8 ra4us)
 {
+    g_csi_params.bss_type           = bss_type;
     g_csi_params.csi_enable         = csi_enable;
     g_csi_params.head_id            = head_id;
     g_csi_params.tail_id            = tail_id;
@@ -7521,6 +8239,7 @@ int csi_data_recv_user(void *buffer, size_t data_len)
 
 static void test_wlan_set_csi_param_header(int argc, char **argv)
 {
+    t_u8 bss_type           = 0;
     t_u16 csi_enable        = 0;
     t_u32 head_id           = 0;
     t_u32 tail_id           = 0;
@@ -7531,11 +8250,12 @@ static void test_wlan_set_csi_param_header(int argc, char **argv)
     t_u8 ra4us              = 0;
     int ret                 = -1;
 
-    if (argc != 9)
+    if (argc != 10)
     {
         (void)PRINTF("Error: invalid number of arguments\r\n");
         (void)PRINTF(
-            "Usage: %s <csi_enable> <head_id> <tail_id> <chip_id> <band_config> <channel> <csi_monitor_enable> "
+            "Usage: %s <sta/uap> <csi_enable> <head_id> <tail_id> <chip_id> <band_config> <channel> "
+            "<csi_monitor_enable> "
             "<ra4us>\r\n\r\n",
             argv[0]);
 
@@ -7558,7 +8278,7 @@ static void test_wlan_set_csi_param_header(int argc, char **argv)
             "us or other\r\n");
 
         (void)PRINTF("\r\nUsage example : \r\n");
-        (void)PRINTF("wlan-set-csi-param-header 1 66051 66051 170 0 11 1 1\r\n");
+        (void)PRINTF("wlan-set-csi-param-header sta 1 66051 66051 170 0 11 1 1\r\n");
 
         dump_csi_param_header();
 
@@ -7571,14 +8291,23 @@ static void test_wlan_set_csi_param_header(int argc, char **argv)
      * User could configure these fields and used these fields to parse CSI event buffer and do verification.
      * All the CSI filters share the same CSI param header.
      */
-    csi_enable         = (t_u16)atoi(argv[1]);
-    head_id            = (t_u32)atoi(argv[2]);
-    tail_id            = (t_u32)atoi(argv[3]);
-    chip_id            = (t_u8)atoi(argv[4]);
-    band_config        = (t_u8)atoi(argv[5]);
-    channel            = (t_u8)atoi(argv[6]);
-    csi_monitor_enable = (t_u8)atoi(argv[7]);
-    ra4us              = (t_u8)atoi(argv[8]);
+    if (string_equal("sta", argv[1]))
+        bss_type = 0;
+    else if (string_equal("uap", argv[1]))
+        bss_type = 1;
+    else
+    {
+        PRINTF("Please put sta or uap\r\n");
+        return;
+    }
+    csi_enable         = (t_u16)atoi(argv[2]);
+    head_id            = (t_u32)atoi(argv[3]);
+    tail_id            = (t_u32)atoi(argv[4]);
+    chip_id            = (t_u8)atoi(argv[5]);
+    band_config        = (t_u8)atoi(argv[6]);
+    channel            = (t_u8)atoi(argv[7]);
+    csi_monitor_enable = (t_u8)atoi(argv[8]);
+    ra4us              = (t_u8)atoi(argv[9]);
 
     if (csi_enable == 1)
     {
@@ -7589,7 +8318,10 @@ static void test_wlan_set_csi_param_header(int argc, char **argv)
         }
     }
 
-    set_csi_param_header(csi_enable, head_id, tail_id, chip_id, band_config, channel, csi_monitor_enable, ra4us);
+    memcpy((void *)&g_csi_params, (void *)wlan_get_csi_cfg_param_default(), sizeof(wlan_csi_config_params_t));
+    set_csi_param_header(bss_type, csi_enable, head_id, tail_id, chip_id, band_config, channel, csi_monitor_enable,
+                         ra4us);
+    wlan_set_csi_cfg_param_default(&g_csi_params);
 }
 
 static void test_wlan_set_csi_filter(int argc, char **argv)
@@ -7654,7 +8386,9 @@ static void test_wlan_set_csi_filter(int argc, char **argv)
         return;
     }
 
+    memcpy((void *)&g_csi_params, (void *)wlan_get_csi_cfg_param_default(), sizeof(wlan_csi_config_params_t));
     set_csi_filter(pkt_type, subtype, flags, op_index, raw_mac);
+    wlan_set_csi_cfg_param_default(&g_csi_params);
 }
 
 static void test_wlan_csi_cfg(int argc, char **argv)
@@ -7670,7 +8404,7 @@ static void test_wlan_csi_cfg(int argc, char **argv)
 }
 #endif
 
-#if defined(CONFIG_11K) || defined(CONFIG_11V) || defined(CONFIG_11R) || defined(CONFIG_ROAMING)
+#if (CONFIG_11K) || (CONFIG_11V) || (CONFIG_11R) || (CONFIG_ROAMING)
 static void test_wlan_rssi_low_threshold(int argc, char **argv)
 {
     uint8_t rssi_threshold;
@@ -7696,7 +8430,7 @@ static void test_wlan_rssi_low_threshold(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_NET_MONITOR
+#if CONFIG_NET_MONITOR
 static void dump_wlan_set_monitor_filter_usage()
 {
     (void)PRINTF("Error : invalid arguments\r\n");
@@ -7900,25 +8634,24 @@ static void test_wlan_net_monitor_cfg(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_CPU_TASK_STATUS
+#if CONFIG_CPU_TASK_STATUS
 void test_wlan_cpu_task_info(int argc, char **argv)
 {
-    /* Take a snapshot of the number of tasks while this
-     * function is executing. */
-    uint32_t task_nums       = uxTaskGetNumberOfTasks();
-    uint32_t task_status_len = task_nums * sizeof(TaskStatus_t);
+#if !CONFIG_MEM_POOLS
+    char *CPU_RunInfo = (char *)OSA_MemoryAllocate(MAX_TASK_INFO_BUF);
+#else
+    char *CPU_RunInfo = (char *)OSA_MemoryPoolAllocate(buf_1024_MemoryPool);
+#endif
 
-    char *CPU_RunInfo = (char *)os_mem_alloc(task_status_len);
-
-    if (!CPU_RunInfo)
+    if (CPU_RunInfo == NULL)
     {
         (void)PRINTF("os mem alloc failed for CPU run info \r\n");
         return;
     }
 
-    memset(CPU_RunInfo, 0, task_status_len);
+    memset(CPU_RunInfo, 0, sizeof(CPU_RunInfo));
     // Get tasks status
-    os_get_task_list(CPU_RunInfo);
+    OSA_GetTaskList(CPU_RunInfo);
 
     /*Relationship between task status and show info
      *
@@ -7936,35 +8669,185 @@ void test_wlan_cpu_task_info(int argc, char **argv)
 
     memset(CPU_RunInfo, 0, task_status_len);
     // Get tasks percentage
-    os_get_runtime_stats(CPU_RunInfo);
+    OSA_GetRuntimeStats(CPU_RunInfo);
     (void)PRINTF("taskName                runTime         Percentage\r\n");
     (void)PRINTF("%s", CPU_RunInfo);
     (void)PRINTF("---------------------------------------------\r\n\n");
 
-    os_mem_free(CPU_RunInfo);
+#if !CONFIG_MEM_POOLS
+    OSA_MemoryFree(CPU_RunInfo);
+#else
+    OSA_MemoryPoolFree(buf_1024_MemoryPool, CPU_RunInfo);
+    ;
+#endif
 }
 #endif
 
-#ifdef CONFIG_TSP
+#if CONFIG_CPU_LOADING
+static void dump_wlan_cpu_loading_usage()
+{
+    (void)PRINTF("Usage:\r\n");
+    (void)PRINTF("    wlan-cpu-loading start <start> sample_loops <number> sample_period <period>\r\n");
+    (void)PRINTF("    <start>: \r\n");
+    (void)PRINTF("	        0: stop ongoing collecting cpu loading info.\r\n");
+    (void)PRINTF("	        1: start collecting cpu loading info.\r\n");
+    (void)PRINTF("    <number>: \r\n");
+    (void)PRINTF("	        The cycle numbers to collect cpu loading info.\r\n");
+    (void)PRINTF(
+        "	        If no value is set, will keep collect cpu loading info until a stop command is received.\r\n");
+    (void)PRINTF("    <period>: \r\n");
+    (void)PRINTF("	        The period to collect cpu loading info.\r\n");
+    (void)PRINTF("	        If no value is set, period is asigned as 2s.\r\n");
+    (void)PRINTF("	        Note: The smaller the period, the greater the impact on performance.\r\n");
+    (void)PRINTF("	   For example:\r\n");
+    (void)PRINTF("	        wlan-cpu-loading start 0\r\n");
+    (void)PRINTF("	            stop ongoing collecting cpu loading info.\r\n");
+    (void)PRINTF("	        wlan-cpu-loading start 1 sample_loops 10\r\n");
+    (void)PRINTF(
+        "	            The cycle numbers of collecting cpu loading is 10 and collect period is default value 2s.\r\n");
+    (void)PRINTF("	        wlan-cpu-loading start 1 sample_loops 10 sample_period 5\r\n");
+    (void)PRINTF("	            The cycle numbers of collecting cpu loading is 10 and collect period is 5s.\r\n");
+    (void)PRINTF("	        wlan-cpu-loading start 1\r\n");
+    (void)PRINTF("	            Ongoing colloecting cpu loading info until execute 'wlan-cpu-loading 0'.\r\n");
+    (void)PRINTF("	        wlan-cpu-loading start 1 sample_period 4\r\n");
+    (void)PRINTF(
+        "	            Ongoing colloecting cpu loading info until execute 'wlan-cpu-loading 0'. And the collect period "
+        "is 4s.\r\n");
+}
+
+static void test_wlan_cpu_loading(int argc, char **argv)
+{
+    int arg = 0;
+    unsigned int value;
+    uint8_t start, period = 0;
+    uint32_t number = 0;
+
+    struct
+    {
+        uint8_t start : 1;
+        uint8_t number : 1;
+        uint8_t period : 1;
+    } info;
+
+    (void)memset(&info, 0, sizeof(info));
+
+    if (argc < 2 && argc > 4)
+    {
+        (void)PRINTF("Error: invalid number of arguments\r\n");
+        dump_wlan_cpu_loading_usage();
+        return;
+    }
+
+    arg++;
+    do
+    {
+        if (!info.start && string_equal("start", argv[arg]))
+        {
+            if (arg + 1 >= argc || get_uint(argv[arg + 1], &value, strlen(argv[arg + 1])))
+            {
+                (void)PRINTF("Error: invalid <start> argument\r\n");
+                dump_wlan_cpu_loading_usage();
+                return;
+            }
+            if (value != 0 && value != 1)
+            {
+                (void)PRINTF("Error: invalid <start> argument\r\n");
+                dump_wlan_cpu_loading_usage();
+                return;
+            }
+
+            start = value & 0xFF;
+            arg += 2;
+            info.start = 1;
+        }
+        else if (!info.number && string_equal("sample_loops", argv[arg]))
+        {
+            if (arg + 1 >= argc || get_uint(argv[arg + 1], &value, strlen(argv[arg + 1])))
+            {
+                (void)PRINTF("Error: invalid <number> argument\r\n");
+                dump_wlan_cpu_loading_usage();
+                return;
+            }
+
+            number = value;
+            arg += 2;
+            info.number = 1;
+        }
+        else if (!info.period && string_equal("sample_period", argv[arg]))
+        {
+            if (arg + 1 >= argc || get_uint(argv[arg + 1], &value, strlen(argv[arg + 1])))
+            {
+                (void)PRINTF("Error: invalid <period> argument\r\n");
+                dump_wlan_cpu_loading_usage();
+                return;
+            }
+
+            period = value & 0xFF;
+            arg += 2;
+            info.period = 1;
+        }
+        else
+        {
+            (void)PRINTF("Error: argument %d is invalid\r\n", arg);
+            dump_wlan_cpu_loading_usage();
+            return;
+        }
+    } while (arg < argc);
+
+    if (start == 1)
+    {
+        (void)PRINTF("Start cpu loading test:\r\n");
+        if (number == 0)
+            (void)PRINTF("%s\r\n", "Keeping CPU loading test");
+        else
+            (void)PRINTF("Cycle numbers of CPU loading test: %d\r\n", number);
+
+        if (period == 0)
+            (void)PRINTF("Period of CPU loading test: 2s\r\n");
+        else
+            (void)PRINTF("Period of CPU loading test: %d s\r\n", period);
+    }
+
+    wlan_cpu_loading(start, number, period);
+}
+#endif
+
+#if CONFIG_TSP
 static void dump_wlan_tsp_cfg_usage()
 {
     (void)PRINTF("Usage:\r\n");
-    (void)PRINTF("    wlan-set-tsp-cfg enable <enable> backoff <backoff> high <highThreshold> low <lowThreshold>\r\n");
-    (void)PRINTF("    <enable>: 0 -- disable   1 -- enable\r\n");
-    (void)PRINTF("	  <backoff>: power backoff [0...20]\r\n");
-    (void)PRINTF("	  <highThreshold>: High power Threshold [0...300]\r\n");
-    (void)PRINTF("	  <lowThreshold>: Low power Threshold [0...300]\r\n");
-    (void)PRINTF("	   High Threshold must be greater than Low Threshold\r\n");
-    (void)PRINTF("	   If you want to get tsp cfg, you can just use wlan-get-tsp-cfg.\r\n");
+    (void)PRINTF(
+        "    wlan-set-tsp-cfg en <0/1> bo <0-20> high <0-300> low <0-300> "
+        "dcstep <1-100> dcmin <0-100> hightemp <-100-150> lowtemp <-100-150>\r\n");
+    (void)PRINTF("	  <en>: 0 -- disable   1 -- enable\r\n");
+    (void)PRINTF("	  <bo>: power backoff [0...20]\r\n");
+    (void)PRINTF("	  <high>: High power Threshold [0...300]\r\n");
+    (void)PRINTF("	  <low>: Low power Threshold [0...300]\r\n");
+    (void)PRINTF("	  <dcstep>: Duty Cycle setp [1...100]\r\n");
+    (void)PRINTF("	  <dcmin>: Duty Cycle min [0...100]\r\n");
+    (void)PRINTF("	  <hightemp>: High Throttle Threshold temperature [-100...150]\r\n");
+    (void)PRINTF("	  <lowtemp>: Low Throttle Threshold temperature [-100...150]\r\n");
+    (void)PRINTF("	  High Threshold must be greater than Low Threshold\r\n");
+    (void)PRINTF("	  High Throttle Threshold temperature must be greater than Low Throttle Threshold temperature.\r\n");
+    (void)PRINTF("	  If you want to get tsp cfg, you can just use wlan-get-tsp-cfg.\r\n");
+    (void)PRINTF("\r\nUsage example : \r\n");
+    (void)PRINTF(
+        "wlan-set-tsp-cfg wlan-set-tsp-cfg en 1 bo 0 high 93 low 83 dcstep 5 dcmin 10 hightemp 120 lowtemp 110 \r\n");
+    (void)PRINTF("wlan-set-tsp-cfg en 0 \r\n");
 }
 static void test_wlan_set_tsp_cfg(int argc, char **argv)
 {
     int arg = 0;
     unsigned int value;
+    int tempvalue;
     t_u16 enable        = 0;
     t_u32 back_off      = 0;
     t_u32 highThreshold = 0;
     t_u32 lowThreshold  = 0;
+    t_u32 dutycycstep   = 0;
+    t_u32 dutycycmin    = 0;
+    int highthrtemp     = 0;
+    int lowthrtemp      = 0;
     int ret             = WM_SUCCESS;
 
     struct
@@ -7973,11 +8856,15 @@ static void test_wlan_set_tsp_cfg(int argc, char **argv)
         unsigned backoff : 1;
         unsigned high : 1;
         unsigned low : 1;
+        unsigned dutycycstep : 1;
+        unsigned dutycycmin : 1;
+        unsigned highthrtemp : 1;
+        unsigned lowthrtemp : 1;
     } info;
 
     (void)memset(&info, 0, sizeof(info));
 
-    if (argc < 3 || argc > 9)
+    if (argc < 3 || argc > 17)
     {
         (void)PRINTF("Error: invalid number of arguments\r\n");
         dump_wlan_tsp_cfg_usage();
@@ -7987,7 +8874,7 @@ static void test_wlan_set_tsp_cfg(int argc, char **argv)
     arg++;
     do
     {
-        if (!info.enable && string_equal("enable", argv[arg]))
+        if (!info.enable && string_equal("en", argv[arg]))
         {
             if (get_uint(argv[arg + 1], &value, strlen(argv[arg + 1])) || (value != 0 && value != 1))
             {
@@ -7999,7 +8886,7 @@ static void test_wlan_set_tsp_cfg(int argc, char **argv)
             info.enable = 1;
             enable      = value & 0xFF;
         }
-        else if (!info.backoff && string_equal("backoff", argv[arg]))
+        else if (!info.backoff && string_equal("bo", argv[arg]))
         {
             if (get_uint(argv[arg + 1], &value, strlen(argv[arg + 1])) || value > 20)
             {
@@ -8035,22 +8922,73 @@ static void test_wlan_set_tsp_cfg(int argc, char **argv)
             info.low     = 1;
             lowThreshold = value;
         }
+        else if (!info.dutycycstep && string_equal("dcstep", argv[arg]))
+        {
+            if (get_uint(argv[arg + 1], &value, strlen(argv[arg + 1])) || value > 100)
+            {
+                (void)PRINTF("Error: invalid dutycycstep argument\r\n");
+                dump_wlan_tsp_cfg_usage();
+                return;
+            }
+            arg += 2;
+            info.dutycycstep = 1;
+            dutycycstep      = value;
+        }
+        else if (!info.dutycycmin && string_equal("dcmin", argv[arg]))
+        {
+            if (get_uint(argv[arg + 1], &value, strlen(argv[arg + 1])) || value > 100)
+            {
+                (void)PRINTF("Error: invalid dutycycmin argument\r\n");
+                dump_wlan_tsp_cfg_usage();
+                return;
+            }
+            arg += 2;
+            info.dutycycmin = 1;
+            dutycycmin      = value;
+        }
+        else if (!info.highthrtemp && string_equal("hightemp", argv[arg]))
+        {
+            tempvalue = (int)atoi(argv[arg + 1]);
+            if (tempvalue < -100 || tempvalue > 150)
+            {
+                (void)PRINTF("Error: invalid high throttle temperature threshold argument\r\n");
+                dump_wlan_tsp_cfg_usage();
+                return;
+            }
+            arg += 2;
+            info.highthrtemp = 1;
+            highthrtemp      = tempvalue;
+        }
+        else if (!info.lowthrtemp && string_equal("lowtemp", argv[arg]))
+        {
+            tempvalue = (int)atoi(argv[arg + 1]);
+            if (tempvalue < -100 || tempvalue > 150)
+            {
+                (void)PRINTF("Error: invalid low throttle temperature threshold argument\r\n");
+                dump_wlan_tsp_cfg_usage();
+                return;
+            }
+            arg += 2;
+            info.lowthrtemp = 1;
+            lowthrtemp      = tempvalue;
+        }
         else
         {
             (void)PRINTF("Error: invalid [%d] argument\r\n", arg + 1);
             dump_wlan_tsp_cfg_usage();
             return;
         }
-
     } while (arg < argc);
 
-    if (highThreshold <= lowThreshold)
+    if (enable && ((highThreshold <= lowThreshold) || (highthrtemp <= lowthrtemp)))
     {
         (void)PRINTF("Error: High Threshold must be greater than Low Threshold\r\n");
         dump_wlan_tsp_cfg_usage();
         return;
     }
-    ret = wlan_set_tsp_cfg(enable, back_off, highThreshold, lowThreshold);
+
+    ret = wlan_set_tsp_cfg(enable, back_off, highThreshold, lowThreshold, dutycycstep, dutycycmin, highthrtemp,
+                           lowthrtemp);
 
     if (ret != WM_SUCCESS)
     {
@@ -8065,7 +9003,14 @@ static void test_wlan_get_tsp_cfg(int argc, char **argv)
     t_u32 back_off      = 0;
     t_u32 highThreshold = 0;
     t_u32 lowThreshold  = 0;
-    int ret             = WM_SUCCESS;
+    t_u32 dutycycstep   = 0;
+    t_u32 dutycycmin    = 0;
+    int highthrtemp     = 0;
+    int lowthrtemp      = 0;
+    int currCAUTemp     = 0;
+    int currRFUTemp     = 0;
+
+    int ret = WM_SUCCESS;
 
     if (argc != 1)
     {
@@ -8073,7 +9018,8 @@ static void test_wlan_get_tsp_cfg(int argc, char **argv)
         return;
     }
 
-    ret = wlan_get_tsp_cfg(&enable, &back_off, &highThreshold, &lowThreshold);
+    ret = wlan_get_tsp_cfg(&enable, &back_off, &highThreshold, &lowThreshold, &dutycycstep, &dutycycmin, &highthrtemp,
+                           &lowthrtemp, &currCAUTemp, &currRFUTemp);
 
     if (ret != WM_SUCCESS)
     {
@@ -8085,12 +9031,18 @@ static void test_wlan_get_tsp_cfg(int argc, char **argv)
     (void)PRINTF("	Enable TSP Algorithm: %d\r\n", enable);
     (void)PRINTF("		0: disable 1: enable\r\n");
     (void)PRINTF("	Power Management Backoff: %d dB\r\n", back_off);
-    (void)PRINTF("	Low Power BOT Threshold: %d °C\r\n", lowThreshold);
-    (void)PRINTF("	High Power BOT Threshold: %d °C\r\n", highThreshold);
+    (void)PRINTF("	Low Power BOT  Threshold(celcius): %d\r\n", lowThreshold);
+    (void)PRINTF("	High Power BOT Threshold(celcius): %d\r\n", highThreshold);
+    (void)PRINTF("	Duty Cycle setp(percentage): %d\r\n", dutycycstep);
+    (void)PRINTF("	Duty Cycle min (percentage): %d\r\n", dutycycmin);
+    (void)PRINTF("	High Throttle Threshold temperature(celcius): %d\r\n", highthrtemp);
+    (void)PRINTF("	Low Throttle  Threshold temperature(celcius): %d\r\n", lowthrtemp);
+    (void)PRINTF("	CAU TSEN Temperature(celcius): %d\r\n", currCAUTemp);
+    (void)PRINTF("	RFU      Temperature(celcius): %d\r\n", currRFUTemp);
 }
 #endif
 
-#ifdef CONFIG_CLOUD_KEEP_ALIVE
+#if CONFIG_CLOUD_KEEP_ALIVE
 
 #include "lwip/priv/tcp_priv.h"
 #include "lwip/stats.h"
@@ -8115,8 +9067,16 @@ static err_t wlan_tcp_client_connected(void *arg, struct tcp_pcb *pcb, err_t err
     char clientString[] = "hello\r\n";
     t_u8 count          = 5;
     char *clientData    = NULL;
-
-    clientData = os_mem_alloc(DATA_LEN);
+#if !CONFIG_MEM_POOLS
+    clientData = OSA_MemoryAllocate(DATA_LEN);
+#else
+    clientData = OSA_MemoryPoolAllocate(buf_1536_MemoryPool);
+#endif
+    if (clientData == NULL)
+    {
+        (void)PRINTF("Error: failed to alloc memory!\r\n");
+        return ERR_MEM;
+    }
     (void)memset((t_u8 *)clientData, 0, DATA_LEN);
     (void)memcpy(clientData, clientString, sizeof(clientString));
 
@@ -8125,7 +9085,11 @@ static err_t wlan_tcp_client_connected(void *arg, struct tcp_pcb *pcb, err_t err
         tcp_write(pcb, clientData, DATA_LEN, TCP_WRITE_FLAG_COPY);
         tcp_output(pcb);
     }
-
+#if !CONFIG_MEM_POOLS
+    OSA_MemoryFree(clientData);
+#else
+    OSA_MemoryPoolFree(buf_1536_MemoryPool, clientData);
+#endif
     return ERR_OK;
 }
 
@@ -8206,10 +9170,11 @@ static void test_wlan_tcp_client(int argc, char **argv)
         (void)PRINTF("Cloud keep alive not started for given destination ip and port\r\n");
         return;
     }
-
+#if CONFIG_IPV6
     (void)memcpy(&ipaddr.u_addr.ip4, &dst_ip, sizeof(ip4_addr_t));
-#ifdef CONFIG_IPV6
     ipaddr.type = IPADDR_TYPE_V4;
+#else
+    (void)memcpy(&ipaddr.addr, &dst_ip, sizeof(ip4_addr_t));
 #endif
 
     tcp_client_pcb = tcp_new();
@@ -8361,7 +9326,7 @@ static void test_wlan_cloud_keep_alive(int argc, char **argv)
 }
 #endif
 
-#ifdef STA_SUPPORT
+#if STA_SUPPORT
 static void test_wlan_get_signal(int argc, char **argv)
 {
     wlan_rssi_info_t signal;
@@ -8390,6 +9355,120 @@ static void test_wlan_get_signal(int argc, char **argv)
                  (int)signal.data_nf_last, (int)signal.data_nf_avg);
 }
 #endif
+
+static void dump_wlan_bandcfg_bit_usage(void)
+{
+    (void)PRINTF("        Bits in Band:\r\n");
+    (void)PRINTF("        bit 0: B (Not support set)\r\n");
+    (void)PRINTF("        bit 1: G (Not support set)\r\n");
+    (void)PRINTF("        bit 2: A (Not support set)\r\n");
+    (void)PRINTF("        bit 3: GN (Not support set)\r\n");
+    (void)PRINTF("        bit 4: AN (Not support set)\r\n");
+#if CONFIG_11AC
+    (void)PRINTF("        bit 5: AC 2.4G (Not support set)\r\n");
+    (void)PRINTF("        bit 6: AC 5G (Not support set)\r\n");
+#endif
+#if CONFIG_11AX
+    (void)PRINTF("        bit 8: AX 2.4G\r\n");
+    (void)PRINTF("        bit 9: AX 5G\r\n");
+#endif
+}
+
+static void test_wlan_get_bandcfg(int argc, char **argv)
+{
+    wlan_bandcfg_t bandcfg;
+    int ret = WM_SUCCESS;
+
+    (void)memset(&bandcfg, 0, sizeof(bandcfg));
+
+    ret = wlan_get_bandcfg(&bandcfg);
+    if (ret != WM_SUCCESS)
+    {
+        (void)PRINTF("Unable to get bandcfg\r\n");
+        return;
+    }
+    (void)PRINTF("\tconfig band: 0x%x\r\n", bandcfg.config_bands);
+    (void)PRINTF("\tfw band: 0x%x\r\n", bandcfg.fw_bands);
+    dump_wlan_bandcfg_bit_usage();
+}
+
+#if CONFIG_11AX
+static void dump_wlan_set_bandcfg(void)
+{
+    (void)PRINTF("Usage:\r\n");
+    (void)PRINTF("    wlan-set-bandcfg <value>\r\n");
+    dump_wlan_bandcfg_bit_usage();
+}
+#endif
+
+static void test_wlan_set_bandcfg(int argc, char **argv)
+{
+#if CONFIG_11AX
+    wlan_bandcfg_t bandcfg;
+    uint32_t bandcfg_11ax_2G = 0;
+    uint32_t bandcfg_11ax_5G = 0;
+    uint32_t val             = 0;
+    int ret                  = WM_SUCCESS;
+#endif
+
+#if !CONFIG_11AX
+    (void)PRINTF("Block set bandcfg when 11AX is not supported.\r\n");
+    return;
+#else
+
+    if (argc != 2)
+    {
+        (void)PRINTF("Error: invalid number of arguments\r\n");
+        dump_wlan_set_bandcfg();
+        return;
+    }
+
+    val = a2hex_or_atoi(argv[1]);
+
+    bandcfg_11ax_2G = (val & MBIT(8));
+    bandcfg_11ax_5G = (val & MBIT(9));
+
+    if ((bandcfg_11ax_2G && !bandcfg_11ax_5G) || (!bandcfg_11ax_2G && bandcfg_11ax_5G))
+    {
+        (void)PRINTF("Please set 11ax 2G/5G bit both 0 or both 1.\r\n");
+        dump_wlan_set_bandcfg();
+        return;
+    }
+
+    (void)memset(&bandcfg, 0, sizeof(bandcfg));
+    ret = wlan_get_bandcfg(&bandcfg);
+    if (ret != WM_SUCCESS)
+    {
+        (void)PRINTF("Unable to get bandcfg\r\n");
+        return;
+    }
+
+    if (bandcfg_11ax_2G)
+    {
+        bandcfg.config_bands |= (MBIT(8));
+    }
+    else
+    {
+        bandcfg.config_bands &= ~(MBIT(8));
+    }
+
+    if (bandcfg_11ax_5G)
+    {
+        bandcfg.config_bands |= (MBIT(9));
+    }
+    else
+    {
+        bandcfg.config_bands &= ~(MBIT(9));
+    }
+
+    ret = wlan_set_bandcfg(&bandcfg);
+    if (ret != WM_SUCCESS)
+    {
+        (void)PRINTF("Unable to set bandcfg\r\n");
+        return;
+    }
+#endif
+}
 
 static void dump_wlan_set_multiple_dtim_usage(void)
 {
@@ -8426,7 +9505,7 @@ static void test_wlan_set_multiple_dtim(int argc, char **argv)
     (void)PRINTF("Set multiple dtim to %d\r\n", multiple_dtim);
 }
 
-#ifdef CONFIG_SET_SU
+#if CONFIG_SET_SU
 static void dump_wlan_set_su_usage(void)
 {
     (void)PRINTF("Usage:\r\n");
@@ -8493,7 +9572,7 @@ static void test_wlan_set_su(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_WIFI_FORCE_RTS
+#if CONFIG_WIFI_FORCE_RTS
 #define HOSTCMD_RESP_BUFF_SIZE 1024
 uint8_t debug_resp_buf[HOSTCMD_RESP_BUFF_SIZE] = {0};
 
@@ -8562,7 +9641,7 @@ static void test_wlan_set_forceRTS(int argc, char **argv)
 }
 #endif
 
-#if defined(CONFIG_IPS)
+#if (CONFIG_IPS)
 static void dump_wlan_set_ips_usage()
 {
     (void)PRINTF("Usage:\r\n");
@@ -8600,7 +9679,7 @@ static void test_wlan_set_ips(int argc, char **argv)
 }
 #endif
 
-#if defined(CONFIG_WPA_SUPP_WPS) || defined(CONFIG_WPS2)
+#if (CONFIG_WPA_SUPP_WPS) || (CONFIG_WPS2)
 static void test_wlan_start_wps_pbc(int argc, char **argv)
 {
     int ret;
@@ -8615,15 +9694,15 @@ static void test_wlan_start_wps_pbc(int argc, char **argv)
 
     if (ret == -WM_FAIL)
     {
-        PRINTF("Start WPS PBC failed\r\n");
+        (void)PRINTF("Start WPS PBC failed\r\n");
     }
     else if (ret == -2)
     {
-        PRINTF("FAIL-PBC-OVERLAP\r\n");
+        (void)PRINTF("FAIL-PBC-OVERLAP\r\n");
     }
     else
     {
-        PRINTF("Started WPS PBC session\r\n");
+        (void)PRINTF("Started WPS PBC session\r\n");
     }
 }
 
@@ -8637,7 +9716,7 @@ static void test_wlan_start_wps_pin(int argc, char **argv)
         return;
     }
 
-#if defined(CONFIG_WPA_SUPP_WPS)
+#if (CONFIG_WPA_SUPP_WPS)
     ret = wlan_start_wps_pin(argv[1]);
 #else
     ret = wlan_start_wps_pin((uint32_t)atoi(argv[1]));
@@ -8645,11 +9724,11 @@ static void test_wlan_start_wps_pin(int argc, char **argv)
 
     if (ret != WM_SUCCESS)
     {
-        PRINTF("Invalid PIN entered\r\n");
+        (void)PRINTF("Invalid PIN entered\r\n");
     }
     else
     {
-        PRINTF("Started WPS PIN session with pin as: %s\r\n", argv[1]);
+        (void)PRINTF("Started WPS PIN session with pin as: %s\r\n", argv[1]);
     }
 }
 
@@ -8664,10 +9743,10 @@ static void test_wlan_wps_generate_pin(int argc, char **argv)
     }
 
     wlan_wps_generate_pin(&pin);
-    PRINTF("WPS PIN is: %d\r\n", pin);
+    (void)PRINTF("WPS PIN is: %08d\r\n", pin);
 }
 #endif
-#ifdef CONFIG_WPA_SUPP_WPS
+#if CONFIG_WPA_SUPP_WPS
 static void test_wlan_wps_cancel(int argc, char **argv)
 {
     int ret;
@@ -8682,10 +9761,10 @@ static void test_wlan_wps_cancel(int argc, char **argv)
 
     if (ret != WM_SUCCESS)
     {
-        PRINTF("Cancel WPS failed\r\n");
+        (void)PRINTF("Cancel WPS failed\r\n");
     }
 }
-#ifdef CONFIG_WPA_SUPP_AP
+#if CONFIG_HOSTAPD
 static void test_wlan_start_ap_wps_pbc(int argc, char **argv)
 {
     int ret;
@@ -8700,7 +9779,7 @@ static void test_wlan_start_ap_wps_pbc(int argc, char **argv)
 
     if (ret != WM_SUCCESS)
     {
-        PRINTF("Start AP WPS PBC failed\r\n");
+        (void)PRINTF("Start AP WPS PBC failed\r\n");
     }
 }
 
@@ -8718,11 +9797,11 @@ static void test_wlan_start_ap_wps_pin(int argc, char **argv)
 
     if (ret != WM_SUCCESS)
     {
-        PRINTF("Start AP WPS PIN failed\r\n");
+        (void)PRINTF("Start AP WPS PIN failed\r\n");
     }
     else
     {
-        PRINTF("Started AP WPS PIN session with pin as: %s\r\n", argv[1]);
+        (void)PRINTF("Started AP WPS PIN session with pin as: %s\r\n", argv[1]);
     }
 }
 
@@ -8740,13 +9819,13 @@ static void test_wlan_wps_ap_cancel(int argc, char **argv)
 
     if (ret != WM_SUCCESS)
     {
-        PRINTF("Cancel WPS failed\r\n");
+        (void)PRINTF("Cancel WPS failed\r\n");
     }
 }
 #endif
 #endif
 
-#ifdef CONFIG_TURBO_MODE
+#if CONFIG_TURBO_MODE
 static void test_wlan_get_turbo_mode(int argc, char **argv)
 {
     int ret = -WM_FAIL;
@@ -8849,8 +9928,8 @@ static void test_wlan_set_turbo_mode(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_11AX
-
+#if CONFIG_11AX
+#if CONFIG_WIFI_HTC_DEBUG
 static void dump_wlan_set_debug_htc_usage(void)
 {
     (void)PRINTF("Usage:\r\n");
@@ -8917,6 +9996,7 @@ static void test_wlan_set_debug_htc(int argc, char **argv)
     else
         (void)PRINTF("Failed to set HTC parameter\r\n");
 }
+#endif
 
 static void dump_wlan_enable_disable_htc_usage()
 {
@@ -8999,6 +10079,7 @@ static void test_wlan_11d_enable(int argc, char **argv)
         dump_wlan_11d_enable_usage();
 }
 
+#if defined(RW610)
 static void dump_wlan_country_code(void)
 {
     (void)PRINTF("Usage:\r\n");
@@ -9007,10 +10088,13 @@ static void dump_wlan_country_code(void)
     (void)PRINTF("First two octets are used as the\r\n");
     (void)PRINTF("first two octets of the Country String\r\n");
     (void)PRINTF("For example:\r\n");
-    (void)PRINTF("    wlan-set-country US\r\n");
+    (void)PRINTF("    wlan-set-country WW\r\n");
+#if 0
     (void)PRINTF("    wlan-set-country EU\r\n");
+#endif
     (void)PRINTF("Country Code Options: \r\n");
     (void)PRINTF("    WW  (World Wide Safe)\r\n");
+#if 0
     (void)PRINTF("    US  (US FCC)\r\n");
     (void)PRINTF("    CA  (IC Canada)\r\n");
     (void)PRINTF("    SG  (Singapore)\r\n");
@@ -9020,6 +10104,7 @@ static void dump_wlan_country_code(void)
     (void)PRINTF("    FR  (France)\r\n");
     (void)PRINTF("    JP  (Japan)\r\n");
     (void)PRINTF("    CN  (China)\r\n");
+#endif
     (void)PRINTF("The third octet of the Country String as below\r\n");
     (void)PRINTF("All environments of the current frequency band and country (default)\r\n");
     (void)PRINTF("country3=0x20\r\n");
@@ -9033,9 +10118,11 @@ static void dump_wlan_country_code(void)
     (void)PRINTF("Annex E, Table E-4 (Global operating classes)\r\n");
     (void)PRINTF("country3=0x04\r\n");
 }
+#endif
 
 static void test_wlan_set_country_code(int argc, char **argv)
 {
+#if defined(RW610)
     int ret;
     char country_code[3] = {0};
 
@@ -9052,12 +10139,16 @@ static void test_wlan_set_country_code(int argc, char **argv)
     ret = wlan_set_country_code(country_code);
     if (ret != WM_SUCCESS)
     {
-        (void)PRINTF("Set country code %s is failed\r\n", country_code);
+        (void)PRINTF("Set country code %s is Invalid\r\n", country_code);
     }
     else
     {
         (void)PRINTF("Set country code %s is successful\r\n", country_code);
     }
+#else
+    (void)PRINTF("Set country code Feature not supported.\r\n");
+    return;
+#endif
 }
 
 static void dump_wlan_set_country_ie_ignore_usage(void)
@@ -9098,7 +10189,7 @@ static void test_wlan_set_country_ie_ignore(int argc, char **argv)
     }
 }
 
-#ifdef CONFIG_COEX_DUTY_CYCLE
+#if CONFIG_COEX_DUTY_CYCLE
 static void dump_wlan_single_ant_duty_cycle_usage()
 {
     (void)PRINTF("Usage: wlan-single-ant-duty-cycle <enable/disable> [<Ieee154Duration> <TotalDuration>]\r\n");
@@ -9232,7 +10323,7 @@ static void test_wlan_dual_ant_duty_cycle(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_EXTERNAL_COEX_PTA
+#if CONFIG_EXTERNAL_COEX_PTA
 
 static void dump_wlan_external_coex_pta_usage()
 {
@@ -9577,7 +10668,7 @@ static void test_wlan_external_coex_pta(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_WPA_SUPP_DPP
+#if CONFIG_WPA_SUPP_DPP
 static void test_wlan_dpp_configurator_add(int argc, char **argv)
 {
     int conf_id, is_ap = 0;
@@ -9717,7 +10808,7 @@ static void test_wlan_dpp_bootstrap_get_uri(int argc, char **argv)
     uri = wlan_dpp_bootstrap_get_uri(is_ap, id);
     if (uri)
     {
-        os_thread_sleep(os_msec_to_ticks(1000));
+        OSA_TimeDelay(1000);
         (void)PRINTF("\r\nBootstrapping QR Code URI:\r\n");
         (void)PRINTF("\r\n%s\r\n\r\n", uri);
     }
@@ -9997,7 +11088,7 @@ static void test_wlan_dpp_configurator_sign(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_IMD3_CFG
+#if CONFIG_IMD3_CFG
 
 static void dump_wlan_imd3_cfg_usage(void)
 {
@@ -10069,7 +11160,7 @@ static void test_wlan_imd3_cfg(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_AUTO_RECONNECT
+#if CONFIG_AUTO_RECONNECT
 #define AUTO_RECON_CNT_DEF      255U
 #define AUTO_RECON_TIME_INT_DEF 10U
 #define AUTO_RECON_FLAG_DEF     0U
@@ -10212,7 +11303,7 @@ done:
 }
 #endif
 
-#if defined(CONFIG_WIFI_IND_RESET) && defined(CONFIG_WIFI_IND_DNLD)
+#if (CONFIG_WIFI_IND_RESET) && (CONFIG_WIFI_IND_DNLD)
 static void dump_wlan_set_ind_rst_cfg_usage(void)
 {
     (void)PRINTF("Usage :                                                                \r\n");
@@ -10343,168 +11434,7 @@ static void test_wlan_independent_reset(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_ENABLE_HTTPSERVER
-#include <zephyr/net/socket.h>
-#include <zephyr/kernel.h>
-#include <zephyr/net/net_pkt.h>
-
-#define BIND_PORT 8080
-#define CHECK(r)                       \
-    {                                  \
-        if (r == -1)                   \
-        {                              \
-            printf("Error: " #r "\n"); \
-            exit(1);                   \
-        }                              \
-    }
-static const char content[] = {
-#include "response_big.html.bin.inc"
-};
-
-static void test_wlan_start_httpserver(int argc, char **argv)
-{
-    int serv;
-    struct sockaddr_in bind_addr;
-    static int counter;
-    int ret;
-
-    serv = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    CHECK(serv);
-
-    bind_addr.sin_family      = AF_INET;
-    bind_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    bind_addr.sin_port        = htons(BIND_PORT);
-    CHECK(bind(serv, (struct sockaddr *)&bind_addr, sizeof(bind_addr)));
-
-    CHECK(listen(serv, 5));
-
-    PRINTF(
-        "Single-threaded dumb HTTP server waits for a connection on "
-        "port %d...\n",
-        BIND_PORT);
-
-    while (1)
-    {
-        struct sockaddr_in client_addr;
-        socklen_t client_addr_len = sizeof(client_addr);
-        char addr_str[32];
-        int req_state = 0;
-        const char *data;
-        size_t len;
-
-        int client = accept(serv, (struct sockaddr *)&client_addr, &client_addr_len);
-        if (client < 0)
-        {
-            PRINTF("Error in accept: %d - continuing\n", errno);
-            continue;
-        }
-
-        inet_ntop(client_addr.sin_family, &client_addr.sin_addr, addr_str, sizeof(addr_str));
-        PRINTF("Connection #%d from %s\n", counter++, addr_str);
-
-        /* Discard HTTP request (or otherwise client will get
-         * connection reset error).
-         */
-        while (1)
-        {
-            ssize_t r;
-            char c;
-
-            r = recv(client, &c, 1, 0);
-            if (r == 0)
-            {
-                goto close_client;
-            }
-
-            if (r < 0)
-            {
-                if (errno == EAGAIN || errno == EINTR)
-                {
-                    continue;
-                }
-
-                PRINTF(
-                    "Got error %d when receiving from "
-                    "socket\n",
-                    errno);
-                goto close_client;
-            }
-            if (req_state == 0 && c == '\r')
-            {
-                req_state++;
-            }
-            else if (req_state == 1 && c == '\n')
-            {
-                req_state++;
-            }
-            else if (req_state == 2 && c == '\r')
-            {
-                req_state++;
-            }
-            else if (req_state == 3 && c == '\n')
-            {
-                break;
-            }
-            else
-            {
-                req_state = 0;
-            }
-        }
-
-        data = content;
-        len  = sizeof(content);
-        while (len)
-        {
-            int sent_len = send(client, data, len, 0);
-
-            if (sent_len == -1)
-            {
-                PRINTF("Error sending data to peer, errno: %d\n", errno);
-                break;
-            }
-            data += sent_len;
-            len -= sent_len;
-        }
-
-    close_client:
-        ret = close(client);
-        if (ret == 0)
-        {
-            PRINTF("Connection from %s closed\n", addr_str);
-        }
-        else
-        {
-            PRINTF(
-                "Got error %d while closing the "
-                "socket\n",
-                errno);
-        }
-
-        ret = close(serv);
-        if (ret == 0)
-        {
-            PRINTF("Sever socket closed\n");
-        }
-        else
-        {
-            PRINTF(
-                "Got error %d while closing the "
-                "server socket\n",
-                errno);
-        }
-
-        struct k_mem_slab *rx, *tx;
-        struct net_buf_pool *rx_data, *tx_data;
-
-        net_pkt_get_info(&rx, &tx, &rx_data, &tx_data);
-        printf("rx buf: %d, tx buf: %d\n", atomic_get(&rx_data->avail_count), atomic_get(&tx_data->avail_count));
-
-        return;
-    }
-}
-#endif
-
-#ifdef CONFIG_INACTIVITY_TIMEOUT_EXT
+#if CONFIG_INACTIVITY_TIMEOUT_EXT
 static void dump_wlan_sta_inactivityto_usage(void)
 {
     (void)PRINTF("Usage:\r\n");
@@ -10578,14 +11508,1019 @@ static void test_wlan_sta_inactivityto(int argc, char **argv)
 }
 #endif
 
-#ifdef CONFIG_CAU_TEMPERATURE
+#ifdef RW610
 static void test_wlan_get_temperature(int argc, char **argv)
 {
-    uint32_t board_temperature = 0;
+    int32_t board_temperature = 0;
 
     board_temperature = wlan_get_temperature();
 
     (void)PRINTF("Board temperature :%d \r\n", board_temperature);
+}
+#endif
+
+#if CONFIG_AUTO_NULL_TX
+static void dump_wlan_auto_null_tx_usage(void)
+{
+    (void)PRINTF("Usage:\r\n");
+    (void)PRINTF("    wlan-auto-null-tx <sta/uap> start interval <interval> dst_mac <dst_mac>\r\n");
+    (void)PRINTF("        <interval> bit15:14 unit: 00-s 01-us 10-ms 11-one_shot  bit13-0: interval\r\n");
+    (void)PRINTF("                   Please set interval Hexadecimal value. For example: 0x8064\r\n");
+    (void)PRINTF("        <dst_mac> Destination MAC address\r\n");
+    (void)PRINTF(
+        "                  Please specify dst_mac if bss_type is uAP, and dst_mac should be of STA which connected to "
+        "uAP\r\n");
+    (void)PRINTF("                  If bss_type is not uAP, no need to input dst_mac\r\n");
+    (void)PRINTF("    wlan-auto-null-tx sta stop\r\n");
+}
+
+static void test_wlan_auto_null_tx(int argc, char **argv)
+{
+    int ret                = -WM_FAIL;
+    int arg                = 2;
+    mlan_bss_type bss_type = (mlan_bss_type)0;
+
+    wlan_auto_null_tx_t auto_null_tx;
+
+    if (argc < 3)
+    {
+        (void)PRINTF("Error: invalid number of arguments\r\n");
+        dump_wlan_auto_null_tx_usage();
+        return;
+    }
+
+    memset(&auto_null_tx, 0x00, sizeof(wlan_auto_null_tx_t));
+
+    if (string_equal("sta", argv[1]))
+        bss_type = MLAN_BSS_TYPE_STA;
+    else if (string_equal("uap", argv[1]))
+        bss_type = MLAN_BSS_TYPE_UAP;
+    else
+    {
+        (void)PRINTF("Invalid bss type selection\r\n");
+        return;
+    }
+
+    if (string_equal("start", argv[2]))
+    {
+        auto_null_tx.start = MTRUE;
+        arg += 1;
+        if (string_equal("interval", argv[arg]))
+        {
+            if (argv[arg + 1][0] == '0' && (argv[arg + 1][1] == 'x' || argv[arg + 1][1] == 'X'))
+            {
+                auto_null_tx.interval = a2hex_or_atoi(argv[arg + 1]);
+            }
+            else
+            {
+                (void)PRINTF("Error: invalid interval argument\r\n");
+                dump_wlan_auto_null_tx_usage();
+                return;
+            }
+            arg += 2;
+        }
+        else
+        {
+            (void)PRINTF("Error: argument %d is invalid\r\n", arg);
+            dump_wlan_auto_null_tx_usage();
+            return;
+        }
+
+        if (bss_type == MLAN_BSS_TYPE_STA)
+        {
+            if (is_sta_connected())
+            {
+                ret = wlan_get_current_network_bssid((char *)&auto_null_tx.dst_mac);
+                if (ret != 0)
+                {
+                    (void)PRINTF("Error: could not get current network bssid\r\n");
+                    return;
+                }
+            }
+            else
+            {
+                (void)PRINTF("Error: not conneted AP\r\n");
+                return;
+            }
+        }
+#if UAP_SUPPORT
+        if (bss_type == MLAN_BSS_TYPE_UAP)
+        {
+            wifi_sta_list_t *sl = NULL;
+            (void)wifi_uap_bss_sta_list(&sl);
+            if (!sl)
+            {
+                (void)PRINTF("Failed to get sta list\n\r");
+                return;
+            }
+            if (is_uap_started() && (sl->count > 0))
+            {
+                wifi_sta_info_t *si = (wifi_sta_info_t *)(void *)(&sl->count + 1);
+                if (string_equal("dst_mac", argv[arg]))
+                {
+                    unsigned int mac_matched = 0;
+                    ret                      = get_mac(argv[arg + 1], (char *)&auto_null_tx.dst_mac, ':');
+                    if (ret != 0)
+                    {
+                        dump_wlan_auto_null_tx_usage();
+                        (void)PRINTF("Error: invalid dst_mac argument\r\n");
+                        return;
+                    }
+                    for (int i = 0; i < sl->count; i++)
+                    {
+                        if (!memcmp(si[i].mac, auto_null_tx.dst_mac, 6))
+                        {
+                            mac_matched = 1;
+                            break;
+                        }
+                    }
+                    if (mac_matched == 0)
+                    {
+                        (void)PRINTF("Error: wrong dst_mac, please put one connected STA mac address\r\n");
+                        return;
+                    }
+                    arg += 2;
+                }
+                else
+                {
+                    (void)PRINTF("Error: argument %d is invalid\r\n", arg);
+                    dump_wlan_auto_null_tx_usage();
+                    return;
+                }
+            }
+            else
+            {
+                if (!is_uap_started())
+                    (void)PRINTF("uap isn't up\r\n");
+                else
+                    (void)PRINTF("There is no STA connected to uAP\r\n");
+            }
+        }
+#endif
+    }
+    else if (string_equal("stop", argv[2]))
+    {
+        auto_null_tx.start = MFALSE;
+    }
+    else
+    {
+        (void)PRINTF("Error: invalid [%d] argument, give start/stop\r\n", arg + 1);
+        dump_wlan_auto_null_tx_usage();
+        return;
+    }
+
+    /* bit7-4: bandwidth. bit3-0: priority, ignored if non-WMM */
+    auto_null_tx.priority = 0x07;
+
+    ret = wlan_auto_null_tx(&auto_null_tx, bss_type);
+}
+#endif
+
+#if defined(RW610) && (CONFIG_ANT_DETECT)
+static void swap_scan_entry(scan_result_entry_t *pEntry1, scan_result_entry_t *pEntry2)
+{
+    scan_result_entry_t temp;
+
+    (void)memcpy((void *)&temp, (const void *)pEntry1, sizeof(scan_result_entry_t));
+    (void)memcpy((void *)pEntry1, (const void *)pEntry2, sizeof(scan_result_entry_t));
+    (void)memcpy((void *)pEntry2, (const void *)&temp, sizeof(scan_result_entry_t));
+}
+
+static void copy_scan_result(scan_result_entry_t *pDst, struct wifi_scan_result2 *pSrc)
+{
+    (void)memcpy((void *)&pDst->bssid[0], (const void *)&pSrc->bssid[0], sizeof(pSrc->bssid));
+    (void)memcpy((void *)&pDst->ssid[0], (const void *)((char *)&pSrc->ssid[0]), (size_t)pSrc->ssid_len);
+    pDst->ssid[pSrc->ssid_len] = (char)0;
+    pDst->ssid_len             = (size_t)pSrc->ssid_len;
+    pDst->channel              = pSrc->Channel;
+    pDst->rssi                 = pSrc->RSSI;
+}
+
+static void wlan_sort_scan_entry(scan_result_entry_t *pScan_entry)
+{
+    unsigned int i;
+    unsigned int j;
+    unsigned int minIdx;
+
+    /* selection sort */
+    for (i = 0; i < (ANT_DETECT_MAX_SCAN_ENTRY - 1); i++)
+    {
+        minIdx = i;
+        for (j = i + 1; j < ANT_DETECT_MAX_SCAN_ENTRY; j++)
+        {
+            if (pScan_entry[j].rssi < pScan_entry[minIdx].rssi)
+            {
+                minIdx = j;
+            }
+        }
+
+        if (minIdx != i)
+        {
+            swap_scan_entry(&pScan_entry[minIdx], &pScan_entry[i]);
+        }
+    }
+}
+
+static unsigned char wlan_calculate_avg_rssi(scan_result_entry_t *pScan_entry)
+{
+    unsigned int i;
+    unsigned char avg_rssi = 0;
+    uint16_t sum_rssi      = 0;
+    uint8_t valid_entry    = 0;
+
+    for (i = 0; i < ANT_DETECT_MAX_SCAN_ENTRY; i++)
+    {
+        if (pScan_entry[i].rssi == 0xff)
+        {
+            break;
+        }
+        else if (i > 0)
+        {
+            if (pScan_entry[i].rssi - pScan_entry[0].rssi >= 30)
+            {
+                break;
+            }
+            else
+            {
+                valid_entry++;
+            }
+        }
+        else
+        {
+            valid_entry++;
+        }
+    }
+
+    if (valid_entry > 0 && valid_entry <= ANT_DETECT_MAX_SCAN_ENTRY)
+    {
+        (void)PRINTF("%d valid scan entry found\r\n", valid_entry);
+        for (i = 0; i < valid_entry; i++)
+        {
+            sum_rssi += pScan_entry[i].rssi;
+        }
+        avg_rssi = sum_rssi / valid_entry;
+    }
+
+    return avg_rssi;
+}
+
+/** Find top 5 best scan info (with high RSSI) and save to scan entry
+ *
+ * If scan_networks_count is no more than 5, just copy scan info and sort;
+ * Otherwise, use below logic:
+ * 1.Get the first 5 scan results in scan table to scan entries;
+ * 2.sort scan info in scan entries from high rssi to low rssi;
+ * 3.then when get a new scan results in scan table, if it has
+ *   high rssi than the lowest one in scan entries, replace the
+ *   lowest entry with the new scan info and re-sort scan entries.
+ *
+ */
+static void wlan_get_best_scan_info(wlan_ant_detect_data_t *pData, unsigned int scan_networks_count)
+{
+    int ret;
+    unsigned int i;
+    unsigned int net_count      = scan_networks_count;
+    unsigned int entry_count    = ANT_DETECT_MAX_SCAN_ENTRY;
+    wlan_ant_scan_info_t *pInfo = &pData->scan_info[pData->current_ant - 1];
+    struct wifi_scan_result2 *res;
+
+    if (net_count <= entry_count)
+    {
+        for (i = 0; i < net_count; i++)
+        {
+            ret = wifi_get_scan_result(i, &res);
+            if (ret == WM_SUCCESS)
+            {
+                copy_scan_result(&pInfo->scan_entry[i], res);
+            }
+            else
+            {
+                (void)PRINTF("Error: can't get scan res %d\r\n", i);
+            }
+        }
+        wlan_sort_scan_entry(&pInfo->scan_entry[0]);
+    }
+    else
+    {
+        unsigned int lowest_rssi_index = entry_count - 1;
+        for (i = 0; i < net_count; i++)
+        {
+            ret = wifi_get_scan_result(i, &res);
+            if (ret == WM_SUCCESS)
+            {
+                if (i < entry_count)
+                {
+                    copy_scan_result(&pInfo->scan_entry[i], res);
+
+                    if (i == entry_count - 1)
+                    {
+                        wlan_sort_scan_entry(&pInfo->scan_entry[0]);
+                    }
+                }
+                else
+                {
+                    if (res->RSSI < pInfo->scan_entry[lowest_rssi_index].rssi)
+                    {
+                        copy_scan_result(&pInfo->scan_entry[lowest_rssi_index], res);
+                        wlan_sort_scan_entry(&pInfo->scan_entry[0]);
+                    }
+                }
+            }
+            else
+            {
+                (void)PRINTF("Error: can't get scan res %d\r\n", i);
+            }
+        }
+    }
+
+    (void)PRINTF("List top %d best scanned AP's info:\r\n", entry_count);
+    for (i = 0; i < entry_count; i++)
+    {
+        print_mac(pInfo->scan_entry[i].bssid);
+        (void)PRINTF(" \"%s\"\r\n", pInfo->scan_entry[i].ssid);
+        (void)PRINTF("\tchannel: %d\r\n", pInfo->scan_entry[i].channel);
+        (void)PRINTF("\trssi: -%d dBm\r\n", pInfo->scan_entry[i].rssi);
+    }
+
+    if (pData->detect_mode != PCB_DETECT_MODE)
+    {
+        pInfo->avg_rssi = wlan_calculate_avg_rssi(&pInfo->scan_entry[0]);
+        (void)PRINTF("avg_rssi: -%d dBm\r\n", pInfo->avg_rssi);
+    }
+}
+
+static void wlan_get_specific_scan_info(wlan_ant_scan_info_t *pInfo, unsigned int scan_networks_count)
+{
+    int ret;
+    unsigned int i;
+    unsigned int count = scan_networks_count;
+    struct wifi_scan_result2 *res;
+
+    for (i = 0; i < count; i++)
+    {
+        ret = wifi_get_scan_result(i, &res);
+        if (ret == WM_SUCCESS)
+        {
+            copy_scan_result(&pInfo->scan_entry[pInfo->entry_idx], res);
+        }
+        else
+        {
+            (void)PRINTF("Error: can't get scan res %d\r\n", i);
+        }
+    }
+
+    print_mac(pInfo->scan_entry[pInfo->entry_idx].bssid);
+    (void)PRINTF(" \"%s\"\r\n", pInfo->scan_entry[pInfo->entry_idx].ssid);
+    (void)PRINTF("\tchannel: %d\r\n", pInfo->scan_entry[pInfo->entry_idx].channel);
+    (void)PRINTF("\trssi: -%d dBm\r\n", pInfo->scan_entry[pInfo->entry_idx].rssi);
+}
+
+static void wlan_get_best_two_ants(wlan_ant_detect_data_t *pData)
+{
+    uint16_t i;
+    uint16_t minIdx1;
+    uint16_t minIdx2;
+    wlan_ant_scan_info_t *pScan_info = &pData->scan_info[0];
+
+    if (pScan_info[0].avg_rssi < pScan_info[1].avg_rssi)
+    {
+        minIdx1 = 0;
+        minIdx2 = 1;
+    }
+    else
+    {
+        minIdx1 = 1;
+        minIdx2 = 0;
+    }
+
+    for (i = 2; i < pData->ant_port_count; i++)
+    {
+        if (pScan_info[i].avg_rssi < pScan_info[minIdx1].avg_rssi)
+        {
+            minIdx2 = minIdx1;
+            minIdx1 = i;
+        }
+        else if (pScan_info[i].avg_rssi < pScan_info[minIdx2].avg_rssi)
+        {
+            minIdx2 = i;
+        }
+    }
+
+    pData->best_ant      = minIdx1 + 1;
+    pData->next_best_ant = minIdx2 + 1;
+    pData->detect_done   = 1;
+}
+
+static void wlan_evaluate_ant_by_avg_rssi(wlan_ant_detect_data_t *pData)
+{
+    uint16_t i;
+    uint8_t valid_res                = pData->ant_port_count;
+    wlan_ant_scan_info_t *pScan_info = &pData->scan_info[0];
+
+    (void)PRINTF("\nEvaluate result:\r\n");
+    (void)PRINTF("\t        avg_rssi\r\n");
+    for (i = 0; i < pData->ant_port_count; i++)
+    {
+        (void)PRINTF("Antenna %d", i + 1);
+        (void)PRINTF("\t-%d dBm\r\n", pScan_info[i].avg_rssi);
+        if (pScan_info[i].avg_rssi == 0xff)
+        {
+            valid_res--;
+        }
+    }
+
+    (void)PRINTF("There are %d antenna with valid result%s.\r\n", valid_res, valid_res <= 1U ? "" : "s");
+    if (valid_res <= 1)
+    {
+        pData->detect_done = -1;
+        return;
+    }
+
+    wlan_get_best_two_ants(pData);
+}
+
+/** Evaluate all antennas by one common device
+ *
+ * This function is to find one common BSSID in all antennas' scan entries,
+ * and to find 2 best antennas based on the common BSSID's rssi value.
+ *
+ * The logic is:
+ * 1.Find the ant who has the best scan RSSI of all antennas' scan entries;
+ * 2.Take this ant and its best scan BSSID as a reference;
+ * 3.Loop the reference ant's scan entried (rssi from high to low) and check
+ *   whether the same BSSID is in other antennas;
+ * 4.If find the same BSSID in one antenna, record its entry idx to the
+ *   corresponding location in array com_idx_per_ant[];
+ * 5.As com_idx_per_ant[] is initialized as 0xff, check its value and we can
+ *   we can know whether find a common BSSID or not.
+ * 6.Rank and find 2 best antennas based on the common BSSID's rssi value.
+ *
+ * \return 1 if find one common BSSID.
+ * \return -1 if no common BSSID.
+ *
+ */
+static int wlan_evaluate_ant_by_common_device(wlan_ant_detect_data_t *pData)
+{
+    uint8_t i;
+    uint8_t j;
+    uint8_t com_idx_per_ant[MAX_ANTENNA_PORT_NUM];
+    uint8_t current_best_ant;
+    int detect_done                  = 0;
+    t_u8 zero_bssid[]                = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    wlan_ant_scan_info_t *pScan_info = &pData->scan_info[0];
+    wlan_ant_scan_info_t *pRef_info  = NULL;
+
+    current_best_ant = 0;
+    for (i = 1; i < pData->ant_port_count; i++)
+    {
+        if (pData->scan_info[i].scan_entry[0].rssi < pData->scan_info[current_best_ant].scan_entry[0].rssi)
+        {
+            current_best_ant = i;
+        }
+    }
+
+    pRef_info = &pData->scan_info[current_best_ant];
+
+    memset((void *)&com_idx_per_ant[0], 0xff, pData->ant_port_count);
+    for (i = 0; i < ANT_DETECT_MAX_SCAN_ENTRY; i++)
+    {
+        uint8_t temp = 0;
+        if (memcmp(pRef_info->scan_entry[i].bssid, zero_bssid, 6) == 0)
+        {
+            break;
+        }
+
+        for (uint8_t ant_idx = 0; ant_idx < pData->ant_port_count; ant_idx++)
+        {
+            if (ant_idx == current_best_ant)
+            {
+                continue;
+            }
+
+            for (j = 0; j < ANT_DETECT_MAX_SCAN_ENTRY; j++)
+            {
+                if (memcmp(pScan_info[ant_idx].scan_entry[j].bssid, zero_bssid, 6) == 0)
+                {
+                    break;
+                }
+
+                if (memcmp(pRef_info->scan_entry[i].bssid, pScan_info[ant_idx].scan_entry[j].bssid, 6) == 0)
+                {
+                    com_idx_per_ant[ant_idx] = j;
+                    break;
+                }
+            }
+        }
+
+        for (uint8_t k = 0; k < pData->ant_port_count; k++)
+        {
+            if (com_idx_per_ant[k] == 0xff)
+            {
+                temp++;
+            }
+        }
+
+        /*
+         * if other antennas have the same BSSID as reference ant,
+         * then the corresponding value in com_idx_per_ant[] array
+         * is not 0xff and temp should be 1
+         */
+        if (temp == 1)
+        {
+            com_idx_per_ant[current_best_ant] = i;
+            detect_done                       = 1;
+            break;
+        }
+        else // if (temp > 1)
+        {
+            if (i == ANT_DETECT_MAX_SCAN_ENTRY - 1)
+            {
+                detect_done = -1;
+                break;
+            }
+            else
+            {
+                memset((void *)&com_idx_per_ant[0], 0xff, pData->ant_port_count);
+            }
+        }
+    }
+
+    if (detect_done == 1)
+    {
+        (void)PRINTF("\nFind one common device\r\n");
+        (void)PRINTF("List the info on every antenna for this common device\r\n");
+        for (i = 0; i < pData->ant_port_count; i++)
+        {
+            (void)PRINTF("Antenna %d:\r\n", i + 1);
+            print_mac(pScan_info[i].scan_entry[com_idx_per_ant[i]].bssid);
+            (void)PRINTF(" \"%s\"\r\n", pScan_info[i].scan_entry[com_idx_per_ant[i]].ssid);
+            (void)PRINTF("\trssi[%d]: -%d dBm\r\n", i, pScan_info[i].scan_entry[com_idx_per_ant[i]].rssi);
+            pScan_info[i].avg_rssi = pScan_info[i].scan_entry[com_idx_per_ant[i]].rssi;
+        }
+        wlan_get_best_two_ants(pData);
+    }
+    else
+    {
+        detect_done = -1;
+    }
+
+    return detect_done;
+}
+
+uint8_t device_count_to_check = PCB_DETECT_MODE_CHECK_DEVICE_COUNT;
+static void wlan_evaluate_ant_by_specific_device(wlan_ant_detect_data_t *pData)
+{
+    unsigned int i;
+    unsigned int j;
+    uint16_t sum_rssi                = 0;
+    wlan_ant_scan_info_t *pScan_info = &pData->scan_info[0];
+
+    (void)PRINTF("\nEvaluate result:\r\n");
+    (void)PRINTF("\t       avg_rssi\r\n");
+    for (i = 0; i < pData->ant_port_count; i++)
+    {
+        sum_rssi = 0;
+        (void)PRINTF("Antenna %d", i + 1);
+        for (j = 0; j < device_count_to_check; j++)
+        {
+            sum_rssi += pScan_info[i].scan_entry[j].rssi;
+        }
+        pScan_info[i].avg_rssi = sum_rssi / device_count_to_check;
+        (void)PRINTF("\t-%d dBm\r\n", pScan_info[i].avg_rssi);
+    }
+
+    wlan_get_best_two_ants(pData);
+}
+
+wlan_ant_detect_data_t wlan_ant_detect_data;
+static int __ant_detect_scan_cb(unsigned int count)
+{
+    wlan_ant_detect_data_t *pData = (wlan_ant_detect_data_t *)&wlan_ant_detect_data;
+    wlan_ant_scan_info_t *pInfo   = (wlan_ant_scan_info_t *)&pData->scan_info[pData->current_ant - 1];
+
+    if (count == 0U)
+    {
+        pInfo->avg_rssi = 0xff;
+        (void)PRINTF("no networks found\r\n");
+        goto end;
+    }
+
+    (void)PRINTF("%d network%s found\r\n", count, (count == 1U ? "" : "s"));
+    if (pData->detect_mode == PCB_DETECT_MODE)
+    {
+        if (pData->current_ant == 1)
+        {
+            if (count == 1)
+            {
+                device_count_to_check = 1;
+            }
+            wlan_get_best_scan_info(pData, count);
+        }
+        else
+        {
+            wlan_get_specific_scan_info(pInfo, count);
+        }
+    }
+    else
+    {
+        wlan_get_best_scan_info(pData, count);
+    }
+
+end:
+    pInfo->scan_done = MTRUE;
+    if (pData->detect_mode == PCB_DETECT_MODE)
+    {
+        if (count == 0 && pData->current_ant == 1)
+        {
+            pData->detect_done = -1;
+        }
+        else if (pData->current_ant == pData->ant_port_count && pInfo->entry_idx == device_count_to_check - 1)
+        {
+            (void)PRINTF("evaluate ant by specific device\r\n");
+            wlan_evaluate_ant_by_specific_device(pData);
+        }
+    }
+    else if (pData->current_ant == pData->ant_port_count)
+    {
+        if (wlan_evaluate_ant_by_common_device(pData) == 1)
+        {
+            pData->detect_done = 1;
+        }
+        else
+        {
+            wlan_evaluate_ant_by_avg_rssi(pData);
+        }
+    }
+
+    return 0;
+}
+
+static int wlan_detect_ant_start_scan(wlan_scan_params_v2_t wlan_scan_param)
+{
+    char zero_bssid[6] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    int ret;
+    ret = wlan_scan_with_opt(wlan_scan_param);
+
+    if (ret != 0)
+    {
+        (void)PRINTF("Error: scan request failed\r\n");
+    }
+    else
+    {
+        (void)PRINTF("Scan on ");
+        if (wlan_scan_param.num_channels > 1)
+        {
+            (void)PRINTF("%d channels ", wlan_scan_param.num_channels);
+        }
+        else if (wlan_scan_param.num_channels == 1)
+        {
+            (void)PRINTF("channel %d ", wlan_scan_param.chan_list[0].chan_number);
+        }
+        else
+        {
+            (void)PRINTF("full channel ");
+        }
+
+        if (memcmp(&wlan_scan_param.bssid[0], &zero_bssid[0], 6))
+        {
+            (void)PRINTF("and for bssid ");
+            print_mac((const char *)wlan_scan_param.bssid);
+        }
+        (void)PRINTF("scheduled...\r\n");
+    }
+
+    return ret;
+}
+
+static void wlan_detect_ant_set_mode(uint16_t best_ant, uint16_t next_best_ant)
+{
+    int ret;
+    uint32_t ant_mode;
+    uint16_t evaluate_time                   = 0x0;
+    uint8_t evaluate_mode                    = 0xff;
+    uint8_t evaluate_mode_lookup_table[3][3] = {
+        /*   next best ant  */
+        /* Ant1  Ant2  Ant3 */
+        {0xff, 0, 2}, /* Ant1 */
+        {0, 0xff, 1},
+        /* Ant2 */    /* best ant */
+        {2, 1, 0xff}, /* Ant3 */
+    };
+
+    evaluate_mode = evaluate_mode_lookup_table[best_ant - 1][next_best_ant - 1];
+    ant_mode      = 0xffff;
+    ret           = wlan_set_antcfg(ant_mode, evaluate_time, evaluate_mode);
+    if (ret == WM_SUCCESS)
+    {
+        (void)PRINTF("Enable Antenna diversity with evaluate mode %d successful\r\n", evaluate_mode);
+    }
+    else
+    {
+        (void)PRINTF("Enable Antenna diversity with evaluate mode %d failed\r\n", evaluate_mode);
+    }
+}
+
+static void wlan_start_detect_ant(void)
+{
+    int ret = -1;
+    uint32_t ant_mode;
+    uint16_t evaluate_time = 0x0;
+    uint8_t evaluate_mode  = 0xff;
+    uint16_t current_antenna;
+    unsigned int i                       = 0;
+    unsigned int chIdx                   = 0;
+    wlan_ant_detect_data_t *pDetect_data = (wlan_ant_detect_data_t *)&wlan_ant_detect_data;
+    wlan_scan_params_v2_t wlan_scan_param;
+
+    (void)memset(&wlan_scan_param, 0, sizeof(wlan_scan_params_v2_t));
+    if (pDetect_data->detect_mode == QUICK_DETECT_MODE)
+    {
+        wlan_scan_param.num_channels = 1;
+    }
+    else if (pDetect_data->detect_mode == NORMAL_DETECT_MODE)
+    {
+        wlan_scan_param.num_channels = pDetect_data->channel_list->num_channels;
+        for (i = 0; i < pDetect_data->channel_list->num_channels; i++)
+        {
+            wlan_scan_param.chan_list[i].chan_number = pDetect_data->channel_list->chan_number[i];
+        }
+    }
+    wlan_scan_param.cb = __ant_detect_scan_cb;
+
+    do
+    {
+        pDetect_data->detect_done = 0;
+
+        if (pDetect_data->detect_mode == QUICK_DETECT_MODE)
+        {
+            wlan_scan_param.chan_list[0].chan_number = pDetect_data->channel_list->chan_number[chIdx];
+        }
+
+        for (current_antenna = 1; current_antenna <= pDetect_data->ant_port_count; current_antenna++)
+        {
+            ant_mode = (1 << (current_antenna - 1));
+
+            ret = wlan_set_antcfg(ant_mode, evaluate_time, evaluate_mode);
+            if (ret == WM_SUCCESS)
+            {
+                (void)PRINTF("\nStart to evaluate antenna %d\r\n", current_antenna);
+                pDetect_data->current_ant = current_antenna;
+
+                if (pDetect_data->detect_mode == PCB_DETECT_MODE && current_antenna > 1)
+                {
+                    for (i = 0; i < device_count_to_check; i++)
+                    {
+                        scan_result_entry_t *pSpecInfo = &pDetect_data->scan_info[0].scan_entry[i];
+                        (void)memcpy((void *)&wlan_scan_param.bssid[0], (const void *)&pSpecInfo->bssid[0],
+                                     sizeof(wlan_scan_param.bssid));
+                        wlan_scan_param.num_channels             = 1;
+                        wlan_scan_param.chan_list[0].chan_number = pSpecInfo->channel;
+
+                        pDetect_data->scan_info[current_antenna - 1].scan_done = MFALSE;
+                        pDetect_data->scan_info[current_antenna - 1].entry_idx = i;
+                        ret = wlan_detect_ant_start_scan(wlan_scan_param);
+                        if (ret != 0)
+                        {
+                            break;
+                        }
+                        else
+                        {
+                            while (pDetect_data->scan_info[current_antenna - 1].scan_done != MTRUE)
+                            {
+                                OSA_TimeDelay(3);
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    ret = wlan_detect_ant_start_scan(wlan_scan_param);
+                    if (ret != 0)
+                    {
+                        break;
+                    }
+                    else
+                    {
+                        while (pDetect_data->scan_info[current_antenna - 1].scan_done != MTRUE)
+                        {
+                            OSA_TimeDelay(3);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                (void)PRINTF("\nError: Failed to set Antenna %d\r\n", current_antenna);
+                break;
+            }
+        }
+
+        if (ret != 0)
+        {
+            break;
+        }
+
+        while (pDetect_data->detect_done == 0)
+        {
+            // wait untill evaluation complete
+            OSA_TimeDelay(2);
+        }
+
+        if (pDetect_data->detect_mode == QUICK_DETECT_MODE)
+        {
+            if (pDetect_data->detect_done == 1)
+            {
+                break;
+            }
+            else if (pDetect_data->detect_done == -1)
+            {
+                chIdx++;
+                if (chIdx >= pDetect_data->channel_list->num_channels)
+                {
+                    break;
+                }
+            }
+        }
+        else
+        {
+            break;
+        }
+    } while (pDetect_data->detect_done != 1);
+
+    if (pDetect_data->detect_done == 1)
+    {
+        (void)PRINTF("\nCurrently, best antenna is %d, next best antenna is %d\r\n", pDetect_data->best_ant,
+                     pDetect_data->next_best_ant);
+        wlan_detect_ant_set_mode(pDetect_data->best_ant, pDetect_data->next_best_ant);
+    }
+    else
+    {
+        ant_mode = 1;
+        ret      = wlan_set_antcfg(ant_mode, evaluate_time, evaluate_mode);
+        (void)PRINTF("\nFailed to detect antenna\r\n");
+    }
+}
+
+static void dump_wlan_detect_ant_usage(void)
+{
+    (void)PRINTF("Usage:\r\n");
+    (void)PRINTF("wlan-detect-ant <detect_mode> <ant_port_count> channel <channel> ... \r\n");
+    (void)PRINTF("\r\n");
+    (void)PRINTF("\t<detect_mode>: \r\n");
+    (void)PRINTF("\t             0 -- normal detect mode: scan on all cfg channel list antenna by antenna.\r\n");
+    (void)PRINTF("\t             1 -- quick detect mode: scan channel by channel on all antennas,\r\n");
+    (void)PRINTF("\t                  and stop detect once detect done on one of channel in channel list.\r\n");
+    (void)PRINTF("\t             2 -- PCB detect mode: scan on full channel list with PCB antenna firstly,\r\n");
+    (void)PRINTF(
+        "\t                  and select best 2 ex-APs, for the other antennas, just scan the specific channel\r\n");
+    (void)PRINTF(
+        "\t                  and the specific BSSID of 2 ex-APs; then compare scan RSSI and find best 2 ANTs.\r\n");
+    (void)PRINTF("\t<ant_port_count>: \r\n");
+    (void)PRINTF("\t                total count of antenna port, max 4\r\n");
+    (void)PRINTF("\tchannel <channel> ...: \r\n");
+    (void)PRINTF("\t                     You can specify one or more channels to scan.\r\n");
+    (void)PRINTF("\t                     If configure more than one channel, please seperate with ','.\r\n");
+    (void)PRINTF("\t                     If not specified, will scan on full channel list.\r\n");
+    (void)PRINTF("Examples:\r\n");
+    (void)PRINTF("wlan-detect-ant 1 3 channel 1\r\n");
+    (void)PRINTF("wlan-detect-ant 1 3 channel 1,6,11,36,40,44\r\n");
+    (void)PRINTF("wlan-detect-ant 1 3\r\n");
+    (void)PRINTF("wlan-detect-ant 0 3\r\n");
+    (void)PRINTF("wlan-detect-ant 2 3\r\n");
+}
+
+static void test_wlan_detect_ant(int argc, char **argv)
+{
+    unsigned start_msec;
+    unsigned end_msec;
+    int arg = 1;
+    uint8_t i;
+    uint8_t j;
+    uint8_t detect_mode                       = 0;
+    uint8_t antenna_port_count                = 0;
+    wlan_ant_detect_data_t *pDetect_data      = NULL;
+    cfg_scan_channel_list_t *cfg_channel_list = NULL;
+
+    if (argc < 3 || argc == 4)
+    {
+        dump_wlan_detect_ant_usage();
+        (void)PRINTF("Error: invalid number of arguments\r\n");
+        return;
+    }
+
+    detect_mode = (uint8_t)atoi(argv[arg]);
+    if (detect_mode != NORMAL_DETECT_MODE && detect_mode != QUICK_DETECT_MODE && detect_mode != PCB_DETECT_MODE)
+    {
+        dump_wlan_detect_ant_usage();
+        (void)PRINTF("Error: invalid detect_mode\r\n");
+        return;
+    }
+
+    arg                = 2;
+    antenna_port_count = (uint8_t)atoi(argv[arg]);
+    if (antenna_port_count > MAX_ANTENNA_PORT_NUM || antenna_port_count < 3)
+    {
+        dump_wlan_detect_ant_usage();
+        (void)PRINTF("Error: invalid antenna_port_count\r\n");
+        return;
+    }
+
+    arg = 3;
+    (void)memset(&wlan_ant_detect_data, 0x00, sizeof(wlan_ant_detect_data_t));
+    pDetect_data = (wlan_ant_detect_data_t *)&wlan_ant_detect_data;
+    for (i = 0; i < antenna_port_count; i++)
+    {
+        wlan_ant_scan_info_t *pInfo = (wlan_ant_scan_info_t *)&pDetect_data->scan_info[i];
+        for (j = 0; j < ANT_DETECT_MAX_SCAN_ENTRY; j++)
+        {
+            pInfo->scan_entry[j].rssi = 0xff;
+        }
+    }
+
+    pDetect_data->detect_mode    = detect_mode;
+    pDetect_data->ant_port_count = antenna_port_count;
+    if (pDetect_data->detect_mode == PCB_DETECT_MODE)
+    {
+        goto start_detect;
+    }
+
+#if !CONFIG_MEM_POOLS
+    cfg_channel_list = (cfg_scan_channel_list_t *)OSA_MemoryAllocate(sizeof(cfg_scan_channel_list_t));
+    if (cfg_channel_list == NULL)
+    {
+        (void)PRINTF("Failed to alloc buffer for channel list\r\n");
+        return;
+    }
+#else
+    cfg_channel_list = (cfg_scan_channel_list_t *)OSA_MemoryPoolAllocate(buf_128_MemoryPool);
+    if (cfg_channel_list == NULL)
+    {
+        (void)PRINTF("Failed to alloc buffer for channel list\r\n");
+        return;
+    }
+#endif
+    (void)memset(cfg_channel_list, 0, sizeof(cfg_scan_channel_list_t));
+
+    if (argc > 4 && string_equal("channel", argv[arg]))
+    {
+        if (get_channel_list(argv[arg + 1], (uint8_t *)&cfg_channel_list->num_channels,
+                             (uint8_t *)&cfg_channel_list->chan_number[0], ',') != false)
+        {
+            (void)PRINTF(
+                "Error: invalid channel"
+                " argument\n");
+#if !CONFIG_MEM_POOLS
+            OSA_MemoryFree(cfg_channel_list);
+#else
+            OSA_MemoryPoolFree(buf_128_MemoryPool, cfg_channel_list);
+#endif
+            return;
+        }
+    }
+    else
+    {
+        // get full channel list
+        wlan_chanlist_t chanlist;
+        (void)memset(&chanlist, 0x00, sizeof(wlan_chanlist_t));
+        int rv = wlan_get_chanlist(&chanlist);
+        if (rv != WM_SUCCESS)
+        {
+            (void)PRINTF("Unable to get channel list configuration\r\n");
+#if !CONFIG_MEM_POOLS
+            OSA_MemoryFree(cfg_channel_list);
+#else
+            OSA_MemoryPoolFree(buf_128_MemoryPool, cfg_channel_list);
+#endif
+            return;
+        }
+        else
+        {
+            uint8_t i                      = 0;
+            cfg_channel_list->num_channels = chanlist.num_chans;
+            for (i = 0; i < chanlist.num_chans; i++)
+            {
+                cfg_channel_list->chan_number[i] = chanlist.chan_info[i].chan_num;
+            }
+        }
+    }
+
+    pDetect_data->channel_list = cfg_channel_list;
+
+start_detect:
+    start_msec = OSA_TicksToMsec(OSA_TicksGet());
+    (void)PRINTF("%d: Start to detect ant\r\n", start_msec);
+    wlan_start_detect_ant();
+    if (cfg_channel_list)
+    {
+#if !CONFIG_MEM_POOLS
+        OSA_MemoryFree(cfg_channel_list);
+#else
+        OSA_MemoryPoolFree(buf_128_MemoryPool, cfg_channel_list);
+#endif
+    }
+    end_msec = OSA_TicksToMsec(OSA_TicksGet());
+    (void)PRINTF("%d: End of detect ant\r\n", end_msec);
+    (void)PRINTF("It cost %dms to detect ant\r\n", end_msec - start_msec);
 }
 #endif
 
@@ -10594,7 +12529,9 @@ static struct cli_command tests[] = {
 #if CONFIG_SCHED_SWITCH_TRACE
     {"wlan-sched-switch-debug", NULL, test_wlan_sched_switch_debug},
 #endif
+#if LWIP_STATS_DISPLAY
     {"wlan-net-stats", NULL, test_wlan_net_stats},
+#endif
     {"wlan-set-mac", "<MAC_Address>", test_wlan_set_mac_address},
     {"wlan-scan", NULL, test_wlan_scan},
     {"wlan-scan-opt", "ssid <ssid> bssid ...", test_wlan_scan_opt},
@@ -10610,42 +12547,43 @@ static struct cli_command tests[] = {
     {"wlan-stat", NULL, test_wlan_stat},
     {"wlan-info", NULL, test_wlan_info},
     {"wlan-address", NULL, test_wlan_address},
+#if UAP_SUPPORT
+    {"wlan-uap-disconnect-sta", "<mac address>", test_wlan_uap_disconnect_sta},
     {"wlan-get-uap-channel", NULL, test_wlan_get_uap_channel},
     {"wlan-get-uap-sta-list", NULL, test_wlan_get_uap_sta_list},
+#endif
     {"wlan-ieee-ps", "<0/1>", test_wlan_ieee_ps},
     {"wlan-set-ps-cfg", "<null_pkt_interval>", test_wlan_set_ps_cfg},
     {"wlan-deep-sleep-ps", "<0/1>", test_wlan_deep_sleep_ps},
     {"wlan-get-beacon-interval", NULL, test_wlan_get_beacon_interval},
-#if defined(CONFIG_WNM_PS)
+#if !CONFIG_WPA_SUPP
+#if (CONFIG_WNM_PS)
     {"wlan-wnm-ps", "<0/1> <sleep_interval>", test_wlan_wnm_ps},
 #endif
-#ifdef CONFIG_WIFI_MAX_CLIENTS_CNT
+#endif
+#if CONFIG_WIFI_MAX_CLIENTS_CNT
     {"wlan-set-max-clients-count", "<max clients count>", test_wlan_set_max_clients_count},
 #endif
-#ifdef CONFIG_WIFI_RTS_THRESHOLD
+#if CONFIG_WIFI_RTS_THRESHOLD
     {"wlan-rts", "<sta/uap> <rts threshold>", test_wlan_set_rts},
 #endif
-#ifdef CONFIG_WIFI_FRAG_THRESHOLD
+#if CONFIG_WIFI_FRAG_THRESHOLD
     {"wlan-frag", "<sta/uap> <fragment threshold>", test_wlan_set_frag},
 #endif
-#ifdef CONFIG_11K_OFFLOAD
-    {"wlan-11k-enable", "<0/1>", test_wlan_11k_cfg},
-    {"wlan-11k-neighbor-req", NULL, test_wlan_11k_neighbor_req},
-#endif
-#ifdef CONFIG_11K
+#if CONFIG_11K
     {"wlan-host-11k-enable", "<0/1>", test_wlan_host_11k_cfg},
     {"wlan-host-11k-neighbor-req", "[ssid <ssid>]", test_wlan_host_11k_neighbor_request},
 #endif
-#ifdef CONFIG_11V
+#if CONFIG_11V
     {"wlan-host-11v-bss-trans-query", "<0..16>", test_wlan_host_11v_bss_trans_query},
 #endif
-#ifdef CONFIG_DRIVER_MBO
+#if CONFIG_DRIVER_MBO
     {"wlan-mbo-enable", "<0/1>", test_wlan_mbo_cfg},
     {"wlan-mbo-nonprefer-ch", "<ch0> <Preference0: 0/1/255> <ch1> <Preference1: 0/1/255>",
      test_wlan_mbo_non_prefer_chs},
 #endif
-#ifdef CONFIG_WPA_SUPP
-#ifdef CONFIG_11AX
+#if CONFIG_WPA_SUPP
+#if (CONFIG_11AX && defined(CONFIG_MBO))
     {"wlan-mbo-nonprefer-ch", "\"<oper_class>:<chan>:<preference>:<reason> <oper_class>:<chan>:<preference>:<reason>\"",
      test_wlan_mbo_non_prefer_chs},
     {"wlan-mbo-set-cell-capa", "<cell capa: 1/2/3(default)>", test_wlan_mbo_set_cell_capa},
@@ -10656,39 +12594,49 @@ static struct cli_command tests[] = {
     {"wlan-pmksa-flush", NULL, test_wlan_pmksa_flush},
     {"wlan-set-scan-interval", "<scan_int: in seconds>", test_wlan_set_scan_interval},
 #endif
-#if defined(CONFIG_11MC) || defined(CONFIG_11AZ)
+#if (CONFIG_11MC) || (CONFIG_11AZ)
+    {"wlan-unassoc-ftm-cfg", "<set_get> <on_off>", test_wlan_unassoc_ftm_cfg},
     {"wlan-ftm-ctrl", "<action> <loop_cnt> <peer_mac> <channel>", test_wlan_ftm_ctrl},
-    {"wlan-ftm-cfg", "<protocol> <num_measurements> <measurement_freq> <r2i_sts> <i2r_lmr>", test_wlan_ftm_cfg},
+    {"wlan-11mc-nego-cfg", "<burst_inst> <burst_dur> <min_delta> <asap> <ftm_per_burst> <bw> <burst_period>",
+     test_wlan_11mc_nego_cfg},
+    {"wlan-loc-cfg", "<lci_req> <latit> <longi> <altit> <lat_uncert> <lon_uncert> <alt_uncert>", test_wlan_loc_cfg},
+    {"wlan-civ-cfg", "<civ_loc> <civ_loc_type> <country_code> <civ_add_type>", test_wlan_civ_cfg},
+    {"wlan-11az-rang-cfg", "<protocol> <format_bw> <num_measurements> <measurement_freq> <i2r_sts> <r2i_sts> <i2r_lmr>",
+     test_wlan_11az_rang_cfg},
 #endif
-#ifdef CONFIG_UAP_STA_MAC_ADDR_FILTER
+#if CONFIG_UAP_STA_MAC_ADDR_FILTER
     {"wlan-sta-filter", " <filter mode> [<mac address list>]", test_wlan_set_sta_filter},
 #endif
-#ifdef CONFIG_WIFI_GET_LOG
+#if CONFIG_WIFI_GET_LOG
     {"wlan-get-log", "<sta/uap> <ext>", test_wlan_get_log},
 #endif
-#ifdef CONFIG_WIFI_TX_PER_TRACK
+#if CONFIG_WIFI_TX_PER_TRACK
     {"wlan-tx-pert", "<0/1> <STA/UAP> <p> <r> <n>", test_wlan_tx_pert},
 #endif
-#ifdef CONFIG_ROAMING
+#if CONFIG_ROAMING
     {"wlan-roaming", "<0/1> <rssi_threshold>", test_wlan_roaming},
 #endif
-#ifdef CONFIG_MEF_CFG
+#if CONFIG_MEF_CFG
     {"wlan-multi-mef", "<ping/arp/multicast/del> [<action>]", test_wlan_set_multiple_mef_config},
 #endif
-#if defined(CONFIG_HOST_SLEEP)
+#if CONFIG_HOST_SLEEP
 #ifdef RW610
-#ifdef CONFIG_MEF_CFG
+#if CONFIG_MEF_CFG
     {"wlan-wakeup-condition", "<mef/wowlan wake_up_conds>", test_wlan_wakeup_condition},
 #else
     {"wlan-wakeup-condition", "<wowlan wake_up_conds>", test_wlan_wakeup_condition},
 #endif /*CONFIG_MEF_CFG*/
 #if !defined(CONFIG_WIFI_BLE_COEX_APP)
+#ifdef __ZEPHYR__
+    {"wlan-auto-host-sleep", "<enable> <periodic>", test_wlan_auto_host_sleep},
+#else
     {"wlan-auto-host-sleep", "<enable> <mode> <rtc_timer> <periodic>", test_wlan_auto_host_sleep},
+#endif
 #endif
 #else
     {"enable-ns-offload", NULL, test_wlan_ns_offload},
     {"wlan-auto-arp", NULL, test_wlan_auto_arp},
-#ifdef CONFIG_MEF_CFG
+#if CONFIG_MEF_CFG
     {"wlan-add-packet-filter", "0/1 <patterns number> <ptn_len> <pkt_offset> <ptn> ...........",
      test_wlan_add_packet_filter},
     {"wlan-host-sleep", "<0/1> mef/wowlan <wake_up_conds>", test_wlan_host_sleep},
@@ -10697,47 +12645,50 @@ static struct cli_command tests[] = {
 #endif /*CONFIG_MEF_CFG*/
 #endif /*RW610*/
 #endif /*CONFIG_HOST_SLEEP*/
+#if CONFIG_SEND_HOSTCMD
     {"wlan-send-hostcmd", NULL, test_wlan_send_hostcmd},
-#if defined(RW610) || defined(SD9177)
+#endif
+#if defined(RW610) || defined(SD9177) || defined(IW610)
     {"wlan-ext-coex-uwb", NULL, test_wlan_ext_coex_uwb},
 #endif
+#if UAP_SUPPORT
 #if !defined(SD8801) && !defined(RW610)
-#ifdef CONFIG_11AC
+#if CONFIG_11AC
     {"wlan-set-uap-bandwidth", "<1/2/3> 1:20 MHz 2:40MHz 3:80MHz", test_wlan_set_uap_bandwidth},
 #else
     {"wlan-set-uap-bandwidth", "<1/2> 1:20 MHz 2:40MHz", test_wlan_set_uap_bandwidth},
 #endif
 #endif
     {"wlan-set-uap-hidden-ssid", "<0/1/2>", test_wlan_set_uap_hidden_ssid},
+#endif /* UAP_SUPPORT */
 #ifdef SD8801
     {"wlan-8801-enable-ext-coex", NULL, test_wlan_8801_enable_ext_coex},
     {"wlan-8801-get-ext-coex-stats", NULL, test_wlan_8801_ext_coex_stats},
 #endif
-#ifdef CONFIG_WIFI_EU_CRYPTO
+#if CONFIG_WIFI_EU_CRYPTO
     {"wlan-eu-crypto-rc4", "<EncDec>", test_wlan_eu_crypto_rc4},
     {"wlan-eu-crypto-aes-wrap", "<EncDec>", test_wlan_eu_crypto_aes_wrap},
     {"wlan-eu-crypto-aes-ecb", "<EncDec>", test_wlan_eu_crypto_aes_ecb},
     {"wlan-eu-crypto-ccmp-128", "<EncDec>", test_wlan_eu_crypto_ccmp_128},
+#if !defined(SD8978)
     {"wlan-eu-crypto-ccmp-256", "<EncDec>", test_wlan_eu_crypto_ccmp_256},
     {"wlan-eu-crypto-gcmp-128", "<EncDec>", test_wlan_eu_crypto_gcmp_128},
     {"wlan-eu-crypto-gcmp-256", "<EncDec>", test_wlan_eu_crypto_gcmp_256},
 #endif
-#ifdef CONFIG_WIFI_MEM_ACCESS
+#endif
+#if CONFIG_WIFI_MEM_ACCESS
     {"wlan-mem-access", "<memory_address> [<value>]", test_wlan_mem_access},
 #endif
-#ifdef CONFIG_WIFI_BOOT_SLEEP
+#if CONFIG_WIFI_BOOT_SLEEP
     {"wlan-boot-sleep", "<0/1> 0:Disable 1:Enable", test_wlan_boot_sleep},
 #endif
-#ifdef CONFIG_HEAP_STAT
+#if CONFIG_HEAP_STAT
     {"heap-stat", NULL, test_heap_stat},
 #endif
-#ifdef CONFIG_EU_VALIDATION
-    {"wlan-eu-validation", "<value>", test_wlan_eu_validation},
-#endif
-#ifdef CONFIG_HEAP_DEBUG
+#if CONFIG_HEAP_DEBUG
     {"wlan-os-mem-stat", NULL, test_wlan_os_mem_stat},
 #endif
-#ifdef CONFIG_MULTI_CHAN
+#if CONFIG_MULTI_CHAN
     {"wlan-set-mc-policy", "<0/1>(disable/enable)", test_wlan_set_multi_chan_status},
     {"wlan-get-mc-policy", NULL, test_wlan_get_multi_chan_status},
     {"wlan-set-drcs",
@@ -10745,85 +12696,83 @@ static struct cli_command tests[] = {
      test_wlan_set_drcs_cfg},
     {"wlan-get-drcs", NULL, test_wlan_get_drcs_cfg},
 #endif
-#if defined(CONFIG_11R)
+#if (CONFIG_11R)
     {"wlan-ft-roam", "<bssid> <channel>", test_wlan_ft_roam},
 #endif
-#ifndef STREAM_2X2
+#ifndef RW610
     {"wlan-set-antcfg", "<ant mode> [evaluate_time]", wlan_antcfg_set},
-    {"wlan-get-antcfg", NULL, wlan_antcfg_get},
+#else
+    {"wlan-set-antcfg", "<ant_mode> <evaluate_time> <evaluate_mode>", wlan_antcfg_set},
 #endif
-#ifdef CONFIG_SCAN_CHANNEL_GAP
+    {"wlan-get-antcfg", NULL, wlan_antcfg_get},
+#if CONFIG_SCAN_CHANNEL_GAP
     {"wlan-scan-channel-gap", "<channel_gap_value>", test_wlan_set_scan_channel_gap},
 #endif
-#ifdef CONFIG_WMM
+#if CONFIG_WMM
     {"wlan-wmm-stat", "<bss_type>", test_wlan_wmm_tx_stats},
 #endif
-#if defined(RW610) && defined(CONFIG_WIFI_RESET)
+#if (CONFIG_WIFI_RESET)
     {"wlan-reset", NULL, test_wlan_reset},
 #endif
     {"wlan-set-regioncode", "<region-code>", test_wlan_set_regioncode},
     {"wlan-get-regioncode", NULL, test_wlan_get_regioncode},
     {"wlan-11d-enable", "<sta/uap> <0/1>", test_wlan_11d_enable},
-#ifdef CONFIG_ECSA
+#if UAP_SUPPORT && CONFIG_ECSA
     {"wlan-uap-set-ecsa-cfg", "<block_tx> <oper_class> <new_channel> <switch_count> <bandwidth>",
      test_wlan_uap_set_ecsa_cfg},
 #endif
-#ifdef CONFIG_CSI
+#if CONFIG_CSI
     {"wlan-csi-cfg", NULL, test_wlan_csi_cfg},
     {"wlan-set-csi-param-header",
-     " <csi_enable> <head_id> <tail_id> <chip_id> <band_config> <channel> <csi_monitor_enable> <ra4us>",
+     " <sta/uap> <csi_enable> <head_id> <tail_id> <chip_id> <band_config> <channel> <csi_monitor_enable> <ra4us>",
      test_wlan_set_csi_param_header},
     {"wlan-set-csi-filter", "<opt> <macaddr> <pkt_type> <type> <flag>", test_wlan_set_csi_filter},
 #endif
-#ifdef CONFIG_TX_RX_HISTOGRAM
+#if CONFIG_TX_RX_HISTOGRAM
     {"wlan-txrx-histogram", "<action> <enable>", test_wlan_txrx_histogram},
 #endif
-#ifdef CONFIG_SUBSCRIBE_EVENT_SUPPORT
+#if CONFIG_SUBSCRIBE_EVENT_SUPPORT
     {"wlan-subscribe-event", "<action> <type> <value> <freq>", test_wlan_subscribe_event},
 #endif
-#ifdef CONFIG_WIFI_REG_ACCESS
+#if CONFIG_WIFI_REG_ACCESS
     {"wlan-reg-access", "<type> <offset> [value]", test_wlan_reg_access},
 #endif
-#ifdef CONFIG_WMM_UAPSD
+#if CONFIG_WMM_UAPSD
     {"wlan-uapsd-enable", "<uapsd_enable>", test_wlan_set_wmm_uapsd},
     {"wlan-uapsd-qosinfo", "<qos_info>", test_wlan_wmm_uapsd_qosinfo},
     {"wlan-uapsd-sleep-period", "<sleep_period>", test_wlan_sleep_period},
 #endif
-#ifdef CONFIG_WIFI_AMPDU_CTRL
-    {"wlan-ampdu-enable", "<sta/uap> <xx: rx/tx bit map. Tx(bit 0), Rx(bit 1> <xx: TID bit map>",
-     test_wlan_ampdu_enable},
-#endif
-#ifdef CONFIG_TX_AMPDU_PROT_MODE
+#if CONFIG_TX_AMPDU_PROT_MODE
     {"wlan-tx-ampdu-prot-mode", "<mode>", test_wlan_tx_ampdu_prot_mode},
 #endif
-#if defined(CONFIG_11K) || defined(CONFIG_11V) || defined(CONFIG_11R) || defined(CONFIG_ROAMING)
+#if (CONFIG_11K) || (CONFIG_11V) || (CONFIG_11R) || (CONFIG_ROAMING)
     {"wlan-rssi-low-threshold", "<threshold_value>", test_wlan_rssi_low_threshold},
 #endif
-#ifdef CONFIG_RX_ABORT_CFG
+#if CONFIG_RX_ABORT_CFG
     {"wlan-rx-abort-cfg", NULL, test_wlan_rx_abort_cfg},
 #endif
-#ifdef CONFIG_RX_ABORT_CFG_EXT
+#if CONFIG_RX_ABORT_CFG_EXT
     {"wlan-set-rx-abort-cfg-ext", "enable <enable> margin <margin> ceil <ceil_thresh> floor <floor_thresh>",
      test_wlan_set_rx_abort_cfg_ext},
     {"wlan-get-rx-abort-cfg-ext", NULL, test_wlan_get_rx_abort_cfg_ext},
 #endif
-#ifdef CONFIG_CCK_DESENSE_CFG
+#if CONFIG_CCK_DESENSE_CFG
     {"wlan-cck-desense-cfg", NULL, test_wlan_cck_desense_cfg},
 #endif
-#if defined(CONFIG_WPS2) || defined(CONFIG_WPA_SUPP_WPS)
+#if (CONFIG_WPS2) || (CONFIG_WPA_SUPP_WPS)
     {"wlan-generate-wps-pin", NULL, test_wlan_wps_generate_pin},
     {"wlan-start-wps-pbc", NULL, test_wlan_start_wps_pbc},
     {"wlan-start-wps-pin", "<8 digit pin>", test_wlan_start_wps_pin},
 #endif
-#ifdef CONFIG_WPA_SUPP_WPS
+#if CONFIG_WPA_SUPP_WPS
     {"wlan-wps-cancel", NULL, test_wlan_wps_cancel},
-#ifdef CONFIG_WPA_SUPP_AP
+#if CONFIG_HOSTAPD
     {"wlan-start-ap-wps-pbc", NULL, test_wlan_start_ap_wps_pbc},
     {"wlan-start-ap-wps-pin", "<8 digit pin>", test_wlan_start_ap_wps_pin},
     {"wlan-wps-ap-cancel", NULL, test_wlan_wps_ap_cancel},
 #endif
 #endif
-#ifdef CONFIG_WPA_SUPP_DPP
+#if CONFIG_WPA_SUPP_DPP
     {"wlan-dpp-configurator-add", NULL, test_wlan_dpp_configurator_add},
     {"wlan-dpp-configurator-params", " conf=<sta-dpp/ap-dpp> ssid=<ascii> configurator=<id>",
      test_wlan_dpp_configurator_params},
@@ -10840,61 +12789,70 @@ static struct cli_command tests[] = {
     {"wlan-dpp-configurator-sign", " conf=<sta-dpp/ap-dpp> ssid=<ascii> configurator=<id>",
      test_wlan_dpp_configurator_sign},
 #endif
-#ifdef CONFIG_NET_MONITOR
+#if CONFIG_NET_MONITOR
     {"wlan-net-monitor-cfg", NULL, test_wlan_net_monitor_cfg},
     {"wlan-set-monitor-filter", "<opt> <macaddr>", test_wlan_set_monitor_filter},
     {"wlan-set-monitor-param", "<action> <monitor_activity> <filter_flags> <radio_type> <chan_number>",
      test_wlan_set_monitor_param},
 #endif
-#ifdef CONFIG_TSP
-    {"wlan-set-tsp-cfg", "<enable> <backoff> <highThreshold> <lowThreshold>", test_wlan_set_tsp_cfg},
+#if CONFIG_TSP
+    {"wlan-set-tsp-cfg",
+     "<enable> <backoff> <highThreshold> <lowThreshold> <dutycycstep> <dutycycmin> <highthrtemp> <lowthrtemp>",
+     test_wlan_set_tsp_cfg},
     {"wlan-get-tsp-cfg", NULL, test_wlan_get_tsp_cfg},
 #endif
-#ifdef CONFIG_CPU_TASK_STATUS
+#if CONFIG_CPU_TASK_STATUS
     {"wlan-cpu-task-info", NULL, test_wlan_cpu_task_info},
 #endif
-#ifdef STA_SUPPORT
+#if CONFIG_CPU_LOADING
+    {"wlan-cpu-loading", "start <start> sample_loops <number> sample_period <period>", test_wlan_cpu_loading},
+#endif
+#if STA_SUPPORT
     {"wlan-get-signal", NULL, test_wlan_get_signal},
 #endif
-#if defined(CONFIG_IPS)
+    {"wlan-set-bandcfg", NULL, test_wlan_set_bandcfg},
+    {"wlan-get-bandcfg", NULL, test_wlan_get_bandcfg},
+#if (CONFIG_IPS)
     {"wlan-set-ips", "<option>", test_wlan_set_ips},
 #endif
-#ifdef CONFIG_11AX
+#if CONFIG_11AX
+#if CONFIG_WIFI_HTC_DEBUG
     {"wlan-set-debug-htc",
      "<count> <vht> <he> <rxNss> <channelWidth> <ulMuDisable> <txNSTS> <erSuDisable> <erSuDisable> <erSuDisable>",
      test_wlan_set_debug_htc},
+#endif
     {"wlan-enable-disable-htc", "<option>", test_wlan_enable_disable_htc},
 #endif
-#ifdef CONFIG_SET_SU
+#if CONFIG_SET_SU
     {"wlan-set-su", "<0/1>", test_wlan_set_su},
 #endif
-#ifdef CONFIG_WIFI_FORCE_RTS
+#if CONFIG_WIFI_FORCE_RTS
     {"wlan-set-forceRTS", "<0/1>", test_wlan_set_forceRTS},
 #endif
-#ifdef CONFIG_11AX
-#ifdef CONFIG_MMSF
+#if CONFIG_11AX
+#if CONFIG_MMSF
     {"wlan-set-mmsf", "<enable> <Density> <MMSF>", test_wlan_set_mmsf},
     {"wlan-get-mmsf", NULL, test_wlan_get_mmsf},
 #endif
 #endif
-#ifdef CONFIG_TURBO_MODE
+#if CONFIG_TURBO_MODE
     {"wlan-get-turbo-mode", "<STA/UAP>", test_wlan_get_turbo_mode},
     {"wlan-set-turbo-mode", "<STA/UAP> <mode>", test_wlan_set_turbo_mode},
 #endif
     {"wlan-set-multiple-dtim", "<value>", test_wlan_set_multiple_dtim},
-#ifdef CONFIG_CLOUD_KEEP_ALIVE
+#if CONFIG_CLOUD_KEEP_ALIVE
     {"wlan-cloud-keep-alive", "<start/stop/reset>", test_wlan_cloud_keep_alive},
     {"wlan_tcp_client", "dst_ip <dst_ip> src_port <src_port> dst_port <dst_port>", test_wlan_tcp_client},
 #endif
     {"wlan-set-country", "<country_code_str>", test_wlan_set_country_code},
     {"wlan-set-country-ie-ignore", "<0/1>", test_wlan_set_country_ie_ignore},
-#ifdef CONFIG_COEX_DUTY_CYCLE
+#if CONFIG_COEX_DUTY_CYCLE
     {"wlan-single-ant-duty-cycle", "<enable/disable> [<Ieee154Duration> <TotalDuration>]",
      test_wlan_single_ant_duty_cycle},
     {"wlan-dual-ant-duty-cycle", "<enable/disable> [<Ieee154Duration> <TotalDuration> <Ieee154FarRangeDuration>]",
      test_wlan_dual_ant_duty_cycle},
 #endif
-#ifdef CONFIG_EXTERNAL_COEX_PTA
+#if CONFIG_EXTERNAL_COEX_PTA
     {"wlan-external-coex-pta",
      "enable <PTA/WCI-2/WCI-2 GPIO> ExtWifiBtArb <enable/disable> PolGrantPin <high/low> PriPtaInt <enable/disable> "
      "StateFromPta <state pin/ priority pin/ state input disable> SampTiming <Sample timing> InfoSampTiming <Sample "
@@ -10902,25 +12860,31 @@ static struct cli_command tests[] = {
      "TrafficPrio <enable/disable> CoexHwIntWic <enable/disable>",
      test_wlan_external_coex_pta},
 #endif
-#ifdef CONFIG_IMD3_CFG
+#if CONFIG_IMD3_CFG
     {"wlan-imd3-cfg", "<enable>", test_wlan_imd3_cfg},
 #endif
-#ifdef CONFIG_AUTO_RECONNECT
+#if CONFIG_AUTO_RECONNECT
     {"wlan-auto-reconnect", "<0/1/2> [<reconnect counter> <reconnect interval> <flags>]", test_wlan_auto_reconnect},
 #endif
-#if defined(CONFIG_WIFI_IND_RESET) && defined(CONFIG_WIFI_IND_DNLD)
+#if (CONFIG_WIFI_IND_RESET) && (CONFIG_WIFI_IND_DNLD)
     {"wlan-set-indrstcfg", "<mode> <gpio_pin>", test_set_indrst_cfg},
     {"wlan-get-indrstcfg", NULL, test_get_indrst_cfg},
     {"wlan-independent-reset", "<mode>", test_wlan_independent_reset},
 #endif
-#ifdef CONFIG_ENABLE_HTTPSERVER
-    {"wlan-start-httpserver", NULL, test_wlan_start_httpserver},
-#endif
-#ifdef CONFIG_INACTIVITY_TIMEOUT_EXT
+#if CONFIG_INACTIVITY_TIMEOUT_EXT
     {"wlan-sta-inactivityto", "<n> <m> <l> [k] [j]", test_wlan_sta_inactivityto},
 #endif
-#ifdef CONFIG_CAU_TEMPERATURE
+#ifdef RW610
     {"wlan-get-temperature", NULL, test_wlan_get_temperature},
+#endif
+#if CONFIG_AUTO_NULL_TX
+    {"wlan-auto-null-tx", "<sta/uap> <start/stop>", test_wlan_auto_null_tx},
+#endif
+#if defined(RW610) && (CONFIG_ANT_DETECT)
+    {"wlan-detect-ant", "<detect_mode> <ant_port_count> channel <channel> ...", test_wlan_detect_ant},
+#endif
+#if CONFIG_WIFI_RECOVERY
+    {"wlan-recovery-test", NULL, test_wlan_recovery_test},
 #endif
 };
 

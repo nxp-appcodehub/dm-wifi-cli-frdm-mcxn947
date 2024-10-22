@@ -1,19 +1,15 @@
 /*
- *  Copyright 2008-2022 NXP
- *
- *  SPDX-License-Identifier: BSD-3-Clause
+ * Copyright 2008-2022, 2024 NXP
+ * SPDX-License-Identifier: BSD-3-Clause
  *
  */
 
-/*! \file cli.h
- * \brief CLI module
+/*!\file cli.h
+ *\brief This file provides CLI interfaces to register commands in CLI mode.
  *
- *  \section cli_usage Usage
- *  The CLI module lets you register commands with the CLI interface. Modules
- *  that wish to register the commands should initialize the struct cli_command
- *  structure and pass this to cli_register_command(). These commands will then
- *  be available on the CLI.
- *
+ * Modules that wish to register the commands should initialize the struct cli_command
+ * structure and pass it to cli_register_command(). These commands will then
+ * be available on the CLI.
  */
 
 #ifndef __CLI_H__
@@ -24,7 +20,9 @@
 #define COEX_APP_SUPPORT
 #endif
 
-#define CONFIG_APP_FRM_CLI_HISTORY
+#ifndef RW610
+#define CONFIG_APP_FRM_CLI_HISTORY 1
+#endif
 
 /** Structure for registering CLI commands */
 struct cli_command
@@ -37,7 +35,6 @@ struct cli_command
     void (*function)(int argc, char **argv);
 };
 
-/*lookup_command declaration for coexapp */
 #ifdef COEX_APP_SUPPORT
 const struct cli_command *lookup_command(char *name, int len);
 #endif
@@ -137,7 +134,7 @@ typedef int (*cli_name_val_get)(const char *name, char *value, int max_len);
  *
  */
 typedef int (*cli_name_val_set)(const char *name, const char *value);
-#ifdef CONFIG_APP_FRM_CLI_HISTORY
+#if CONFIG_APP_FRM_CLI_HISTORY
 /**
  * @internal
  *
@@ -146,20 +143,6 @@ typedef int (*cli_name_val_set)(const char *name, const char *value);
 int cli_add_history_hook(cli_name_val_get get_cb, cli_name_val_set set_cb);
 #endif /* CONFIG_APP_FRM_CLI_HISTORY */
 
-#ifdef CONFIG_CLI_ECHO_MODE
-/** Get the 'echo' mode for CLI
- *
- * \return true if echo is enabled
- * \return false if echo is disabled
- */
-bool cli_get_echo_mode(void);
-
-/** Set the 'echo' mode for CLI
- *
- * \param[in] enabled Set 'true' to enable echo and 'false' to disable.
- */
-void cli_set_echo_mode(bool enabled);
-#endif /*CONFIG_CLI_ECHO_MODE*/
 
 /**
  * @internal
@@ -168,8 +151,8 @@ void cli_set_echo_mode(bool enabled);
  */
 void help_command(int argc, char **argv);
 
-#ifdef CONFIG_UART_INTERRUPT
-#ifdef CONFIG_HOST_SLEEP
+#if CONFIG_UART_INTERRUPT
+#if CONFIG_HOST_SLEEP
 /** Reinit USART
  *
  * \return kStatus_Success, others fail.

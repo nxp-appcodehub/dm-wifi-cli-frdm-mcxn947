@@ -81,7 +81,7 @@ void wlan_11n_delete_bastream(mlan_private *priv, t_u8 *del_ba);
 int wlan_get_rxreorder_tbl(mlan_private *priv, rx_reorder_tbl *buf);
 /** get tx ba stream table */
 int wlan_get_txbastream_tbl(mlan_private *priv, tx_ba_stream_tbl *buf);
-#ifdef AMSDU_IN_AMPDU
+#if CONFIG_AMSDU_IN_AMPDU
 /** Minimum number of AMSDU */
 #define MIN_NUM_AMSDU 2
 /** AMSDU Aggr control cmd resp */
@@ -178,44 +178,6 @@ static void disable_station_ampdu(mlan_private *priv, t_u8 tid, t_u8 *ra)
     return;
 }
 
-#ifndef CONFIG_MLAN_WMSDK
-/**
- *  @brief This function checks whether current BA stream is high priority or not
- *
- *  @param priv     A pointer to mlan_private
- *  @param tid	    TID
- *
- *  @return 	    MTRUE or MFALSE
- */
-INLINE
-static t_u8 wlan_is_cur_bastream_high_prio(mlan_private *priv, int tid)
-{
-    TxBAStreamTbl *ptx_tbl;
-
-    ENTER();
-    ptx_tbl = (TxBAStreamTbl *)(void *)util_peek_list(priv->adapter->pmoal_handle, &priv->tx_ba_stream_tbl_ptr,
-                                                      priv->adapter->callbacks.moal_spin_lock,
-                                                      priv->adapter->callbacks.moal_spin_unlock);
-    if (ptx_tbl == MNULL)
-    {
-        return MFALSE;
-    }
-
-    while (ptx_tbl != (TxBAStreamTbl *)(void *)&priv->tx_ba_stream_tbl_ptr)
-    {
-        if (priv->aggr_prio_tbl[tid].ampdu_user > priv->aggr_prio_tbl[ptx_tbl->ampdu_stat[tid]].ampdu_user)
-        {
-            LEAVE();
-            return MTRUE;
-        }
-
-        ptx_tbl = ptx_tbl->pnext;
-    }
-
-    LEAVE();
-    return MFALSE;
-}
-#endif
 
 /**
  *  @brief This function checks whether AMPDU is allowed or not
@@ -231,7 +193,7 @@ INLINE
 static t_u8
 wlan_is_ampdu_allowed(mlan_private * priv, raListTbl * ptr, int tid)
 {
-#ifdef UAP_SUPPORT
+#if UAP_SUPPORT
     if (GET_BSS_ROLE(priv) == MLAN_BSS_ROLE_UAP)
         return is_station_ampdu_allowed(priv, ptr, tid);
 #endif /* UAP_SUPPORT */
@@ -281,7 +243,7 @@ INLINE
 static t_u8
 wlan_is_amsdu_allowed(mlan_private * priv, raListTbl * ptr, int tid)
 {
-#ifdef UAP_SUPPORT
+#if UAP_SUPPORT
     sta_node *sta_ptr = MNULL;
     if (GET_BSS_ROLE(priv) == MLAN_BSS_ROLE_UAP) {
         if ((sta_ptr = wlan_get_station_entry(priv, ptr->ra))) {
@@ -322,54 +284,6 @@ static t_u8 wlan_is_bastream_avail(mlan_private *priv)
     return ((bastream_num < MLAN_MAX_TX_BASTREAM_SUPPORTED) ? MTRUE : MFALSE);
 }
 
-#ifndef CONFIG_MLAN_WMSDK
-/**
- *  @brief This function finds the stream to delete
- *
- *  @param priv     A pointer to mlan_private
- *  @param ptr      A pointer to RA list table
- *  @param ptr_tid  TID value of ptr
- *  @param ptid     A pointer to TID of stream to delete, if return MTRUE
- *  @param ra       RA of stream to delete, if return MTRUE
- *
- *  @return 	    MTRUE or MFALSE
- */
-INLINE
-static t_u8 wlan_find_stream_to_delete(mlan_private *priv, raListTbl *ptr, int ptr_tid, int *ptid, t_u8 *ra)
-{
-    t_u8 tid;
-    t_u8 ret = MFALSE;
-    TxBAStreamTbl *ptx_tbl;
-
-    ENTER();
-    ptx_tbl = (TxBAStreamTbl *)(void *)util_peek_list(priv->adapter->pmoal_handle, &priv->tx_ba_stream_tbl_ptr,
-                                                      priv->adapter->callbacks.moal_spin_lock,
-                                                      priv->adapter->callbacks.moal_spin_unlock);
-    if (ptx_tbl == MNULL)
-    {
-        LEAVE();
-        return ret;
-    }
-
-    tid = priv->aggr_prio_tbl[ptr_tid].ampdu_user;
-
-    while (ptx_tbl != (TxBAStreamTbl *)(void *)&priv->tx_ba_stream_tbl_ptr)
-    {
-        if (tid > priv->aggr_prio_tbl[ptx_tbl->ampdu_stat[tid]].ampdu_user)
-        {
-            tid   = priv->aggr_prio_tbl[ptx_tbl->ampdu_stat[tid]].ampdu_user;
-            *ptid = ptx_tbl->ampdu_stat[tid];
-            (void)memcpy(ra, ptx_tbl->ra, MLAN_MAC_ADDR_LENGTH);
-            ret = MTRUE;
-        }
-
-        ptx_tbl = ptx_tbl->pnext;
-    }
-
-    LEAVE();
-    return ret;
-}
-#endif
 
 /**
  *  @brief This function checks whether BA stream is setup
@@ -410,7 +324,7 @@ static int wlan_is_11n_enabled(mlan_private *priv, t_u8 *ra)
 {
     int ret = MFALSE;
     ENTER();
-#ifdef UAP_SUPPORT
+#if UAP_SUPPORT
     if (GET_BSS_ROLE(priv) == MLAN_BSS_ROLE_UAP)
     {
         if ((!(ra[0] & 0x01U)) && (priv->is_11n_enabled))
@@ -431,7 +345,7 @@ static int wlan_is_11n_enabled(mlan_private *priv, t_u8 *ra)
  *
  *  @return 	    MTRUE or MFALSE
  */
-#ifdef AMSDU_IN_AMPDU
+#if CONFIG_AMSDU_IN_AMPDU
 INLINE
 static bool wlan_is_amsdu_allowed(mlan_private *priv, t_u8 interface, t_u8 pkt_cnt, t_u8 tid)
 {

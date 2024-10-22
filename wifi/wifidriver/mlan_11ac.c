@@ -14,7 +14,7 @@
 
 /* Additional WMSDK header files */
 #include <wmerrno.h>
-#include <wm_os.h>
+#include <osa.h>
 
 /* Always keep this include at the end of all include files */
 #include <mlan_remap_mem_operations.h>
@@ -30,7 +30,7 @@
 /********************************************************
    Local Functions
 ********************************************************/
-#ifdef CONFIG_11AC
+#if CONFIG_11AC
 /**
  *  @brief determine the center frquency center index for bandwidth
  *         of 80 MHz and 160 MHz
@@ -206,7 +206,7 @@ static void wlan_fill_cap_info(mlan_private *priv, VHT_capa_t *vht_cap, t_u16 ba
 
     ENTER();
 
-#ifdef CONFIG_5GHz_SUPPORT
+#if CONFIG_5GHz_SUPPORT
     if ((bands & BAND_A) != 0U)
     {
         usr_dot_11ac_dev_cap = pmadapter->usr_dot_11ac_dev_cap_a;
@@ -226,7 +226,7 @@ static void wlan_fill_cap_info(mlan_private *priv, VHT_capa_t *vht_cap, t_u16 ba
     LEAVE();
 }
 
-#ifdef CONFIG_11AC
+#if CONFIG_11AC
 /**
  *  @brief Set/get 11ac configuration
  *
@@ -379,7 +379,7 @@ mlan_status wlan_11ac_ioctl_vhtcfg(IN mlan_private *pmpriv, IN t_u8 action, IN m
                 {
                     pmadapter->usr_dot_11ac_dev_cap_bg = usr_vht_cap_info;
                 }
-#ifdef CONFIG_5GHz_SUPPORT
+#if CONFIG_5GHz_SUPPORT
                 else if (vht_cfg->band == BAND_SELECT_A)
                 {
                     pmadapter->usr_dot_11ac_dev_cap_a = usr_vht_cap_info;
@@ -388,7 +388,7 @@ mlan_status wlan_11ac_ioctl_vhtcfg(IN mlan_private *pmpriv, IN t_u8 action, IN m
                 else
                 {
                     pmadapter->usr_dot_11ac_dev_cap_bg = usr_vht_cap_info;
-#ifdef CONFIG_5GHz_SUPPORT
+#if CONFIG_5GHz_SUPPORT
                     pmadapter->usr_dot_11ac_dev_cap_a = usr_vht_cap_info;
 #endif
                 }
@@ -402,7 +402,7 @@ mlan_status wlan_11ac_ioctl_vhtcfg(IN mlan_private *pmpriv, IN t_u8 action, IN m
                     vht_cfg->vht_cap_info = pmadapter->usr_dot_11ac_dev_cap_bg;
                     PRINTM(MINFO, "Get: vht cap info for 2.4GHz 0x%x\n", pmadapter->usr_dot_11ac_dev_cap_bg);
                 }
-#ifdef CONFIG_5GHz_SUPPORT
+#if CONFIG_5GHz_SUPPORT
                 else if (vht_cfg->band == BAND_SELECT_A)
                 {
                     vht_cfg->vht_cap_info = pmadapter->usr_dot_11ac_dev_cap_a;
@@ -521,7 +521,7 @@ static mlan_status wlan_11ac_ioctl_supported_mcs_set(
                  NUM_MCS_FIELD - rx_mcs_supp);
     /* Set MCS32 with 40MHz support */
     if (ISSUPP_CHANWIDTH80(pmadapter->usr_dot_11ac_dev_cap_bg)
-#ifdef CONFIG_5GHz_SUPPORT
+#if CONFIG_5GHz_SUPPORT
         || ISSUPP_CHANWIDTH80(pmadapter->usr_dot_11ac_dev_cap_a)
 #endif
         )
@@ -683,7 +683,7 @@ t_u16 wlan_convert_mcsmap_to_maxrate(mlan_private *priv, t_u8 bands, t_u16 mcs_m
         {0x1248, 0x15F0, 0x1860} /* NSS = 8 */
     };
 
-#ifdef CONFIG_5GHz_SUPPORT
+#if CONFIG_5GHz_SUPPORT
     if ((bands & BAND_AAC) != 0U)
     {
         usr_vht_cap_info    = pmadapter->usr_dot_11ac_dev_cap_a;
@@ -694,7 +694,7 @@ t_u16 wlan_convert_mcsmap_to_maxrate(mlan_private *priv, t_u8 bands, t_u16 mcs_m
 #endif
         usr_vht_cap_info    = pmadapter->usr_dot_11ac_dev_cap_bg;
         usr_dot_11n_dev_cap = pmadapter->usr_dot_11n_dev_cap_bg;
-#ifdef CONFIG_5GHz_SUPPORT
+#if CONFIG_5GHz_SUPPORT
     }
 #endif
 
@@ -883,153 +883,6 @@ void wlan_fill_vht_cap_ie(mlan_private *priv,
     return;
 }
 
-#ifdef HOST_TDLS_SUPPORT
-/*
- *  @brief This function check if AP is in 11ac mode
- *
- *  @param priv         A pointer to mlan_private structure
- *
- *  @return             MTRUE/MFALSE
- */
-t_u8 wlan_is_ap_in_11ac_mode(mlan_private *priv)
-{
-    BSSDescriptor_t *pbss_desc;
-    IEEEtypes_VHTOprat_t *vht_oprat = MNULL;
-    pbss_desc = &priv->curr_bss_params.bss_descriptor;
-#ifdef ENABLE_SAVE_SCAN_RESP
-    vht_oprat = pbss_desc->pvht_oprat;
-    if(!pbss_desc->pvht_cap)
-#else
-    vht_oprat = &pbss_desc->vht_oprat;
-    if(pbss_desc->vht_cap.ieee_hdr.element_id != VHT_CAPABILITY)
-#endif
-        return MFALSE;
-    if(vht_oprat && (vht_oprat->ieee_hdr.element_id == VHT_OPERATION)) {
-        if(vht_oprat->chan_width == VHT_OPER_CHWD_20_40MHZ)
-            return MFALSE;
-        else
-            return MTRUE;
-    }
-    else
-        return MFALSE;
-}
-
-
-/**
- *  @brief This function fills the VHTOperation ie out put format is CPU
- *
- *  @param priv         A pointer to mlan_private structure
- *  @param vht_oprat    A pointer to IEEEtypes_VHTOprat_t structure
- *  @param sta_ptr      A pointer to sta_node
- *
- *  @return             N/A
- */
-void wlan_fill_tdls_vht_oprat_ie(mlan_private *priv, IEEEtypes_VHTOprat_t *vht_oprat, sta_node *sta_ptr)
-{
-    t_u8                    supp_chwd_set;
-    t_u8                    peer_supp_chwd_set;
-    t_u8                    ap_supp_chwd_set;
-    t_u32                   usr_vht_cap_info;
-
-    t_u16 mcs_map_user = 0;
-    t_u16 mcs_map_resp = 0;
-    t_u16 mcs_map_result = 0;
-    t_u16 mcs_user = 0;
-    t_u16 mcs_resp = 0;
-    t_u16 nss;
-    t_u16 no_nss_support = NO_NSS_SUPPORT;
-    t_u8  chan_bw = 0;
-    BSSDescriptor_t *pbss_desc;
-    IEEEtypes_VHTCap_t *pvht_cap = &sta_ptr->vht_cap;
-    IEEEtypes_VHTCap_t *ap_vht_cap = MNULL;
-    ENTER();
-
-    pbss_desc = &priv->curr_bss_params.bss_descriptor;
-
-     /* Check if AP is in 11ac mode */
-     if(MFALSE == wlan_is_ap_in_11ac_mode(priv)){
-        if(sta_ptr->ExtCap.ieee_hdr.element_id != EXT_CAPABILITY){
-            PRINTM(MMSG,"No Peer's Ext_cap info\n");
-            return;
-        }
-        if(!ISSUPP_EXTCAP_TDLS_WIDER_BANDWIDTH(sta_ptr->ExtCap.ext_cap)){
-            PRINTM(MMSG,"Peer don't support Wider Bandwitch in Ext_cap\n");
-            return;
-        }
-    }
-    else{
-#ifdef ENABLE_SAVE_SCAN_RESP
-        ap_vht_cap = pbss_desc->pvht_cap;
-#else
-        ap_vht_cap = &pbss_desc->vht_cap;
-#endif
-    }
-
-    vht_oprat->ieee_hdr.element_id = VHT_OPERATION;
-    vht_oprat->ieee_hdr.len = sizeof(IEEEtypes_VHTOprat_t) - sizeof(IEEEtypes_Header_t);
-
-#ifdef CONFIG_5GHz_SUPPORT
-    if (pbss_desc->bss_band & BAND_A)
-        usr_vht_cap_info= priv->usr_dot_11ac_dev_cap_a;
-    else
-#endif
-    usr_vht_cap_info = priv->usr_dot_11ac_dev_cap_bg;
-
-    /* find the minmum bandwith between AP/TDLS peers */
-    supp_chwd_set = GET_VHTCAP_CHWDSET(usr_vht_cap_info);
-    peer_supp_chwd_set = GET_VHTCAP_CHWDSET(pvht_cap->vht_cap.vht_cap_info);
-    supp_chwd_set = MIN(supp_chwd_set, peer_supp_chwd_set);
-
-    /* We need check AP's bandwidth when TDLS_WIDER_BANDWIDTH is off */
-    if(ap_vht_cap && !ISSUPP_EXTCAP_TDLS_WIDER_BANDWIDTH(sta_ptr->ExtCap.ext_cap)){
-        ap_supp_chwd_set = GET_VHTCAP_CHWDSET(ap_vht_cap->vht_cap.vht_cap_info);
-        supp_chwd_set = MIN(supp_chwd_set, ap_supp_chwd_set);
-    }
-    switch(supp_chwd_set){
-        case VHT_CAP_CHWD_80MHZ:
-            vht_oprat->chan_width = VHT_OPER_CHWD_80MHZ;
-            break;
-        case VHT_CAP_CHWD_160MHZ:
-            vht_oprat->chan_width = VHT_OPER_CHWD_160MHZ;
-            break;
-        case VHT_CAP_CHWD_80_80MHZ:
-            vht_oprat->chan_width = VHT_OPER_CHWD_80_80MHZ;
-            break;
-
-    }
-
-    /* Fill BASIC VHT MCS and NSS Set */
-    /* rx MCS Set, find the minimum of the user rx mcs and peer rx mcs*/
-    mcs_map_user = GET_DEVRXMCSMAP(priv->usr_dot_11ac_mcs_support);
-    mcs_map_resp = pvht_cap->vht_cap.mcs_sets.rx_mcs_map;
-    mcs_map_result = 0;
-    for (nss = 1; nss <= 8; nss++) {
-        mcs_user = GET_VHTNSSMCS(mcs_map_user, nss);
-        mcs_resp = GET_VHTNSSMCS(mcs_map_resp, nss);
-        if ((mcs_user == NO_NSS_SUPPORT) || (mcs_resp == NO_NSS_SUPPORT))
-            SET_VHTNSSMCS(mcs_map_result, nss, no_nss_support);
-        else
-            SET_VHTNSSMCS(mcs_map_result, nss, MIN(mcs_user, mcs_resp));
-    }
-    /* Basic MCS map */
-    vht_oprat->basic_MCS_map = mcs_map_result;
-    switch(vht_oprat->chan_width){
-        case VHT_OPER_CHWD_80MHZ:
-            chan_bw = CHANNEL_BW_80MHZ;
-            break;
-        case VHT_OPER_CHWD_160MHZ:
-            chan_bw = CHANNEL_BW_160MHZ;
-            break;
-        case VHT_OPER_CHWD_80_80MHZ:
-            chan_bw = CHANNEL_BW_80MHZ;
-            break;
-    }
-    vht_oprat->chan_center_freq_1 = wlan_get_center_freq_idx(priv,BAND_AAC,pbss_desc->channel, chan_bw);
-
-    LEAVE();
-    return;
-}
-#endif
 #endif
 
 /**
@@ -1048,11 +901,6 @@ int wlan_cmd_append_11ac_tlv(mlan_private *pmpriv, BSSDescriptor_t *pbss_desc, t
     MrvlIETypes_OperModeNtf_t *pmrvl_oper_mode;
     t_u16 mcs_map_user = 0;
     t_u16 nss;
-#ifdef ADHOC_11N
-    MrvlIETypes_VHTOprat_t *pvht_op;
-    t_u8 supp_chwd_set;
-    t_u32 usr_vht_cap_info;
-#endif
     int ret_len = 0;
 
     ENTER();
@@ -1294,7 +1142,7 @@ void wlan_update_11ac_cap(mlan_private * pmpriv){
     pmpriv->usr_dot_11ac_mcs_support = pmadapter->hw_dot_11ac_mcs_support;
     pmpriv->usr_dot_11ac_dev_cap_bg =
 		pmadapter->hw_dot_11ac_dev_cap & ~DEFALUT_11AC_CAP_BEAMFORMING_RESET_MASK;
-#ifdef CONFIG_5GHz_SUPPORT
+#if CONFIG_5GHz_SUPPORT
     pmpriv->usr_dot_11ac_dev_cap_a =
 		pmadapter->hw_dot_11ac_dev_cap & ~DEFALUT_11AC_CAP_BEAMFORMING_RESET_MASK;
 #endif
@@ -1318,7 +1166,7 @@ t_u8 wlan_11ac_bandconfig_allowed(mlan_private *pmpriv, t_u16 bss_band)
         {
             return (t_u8)(pmpriv->adapter->adhoc_start_band & BAND_GAC);
         }
-#ifdef CONFIG_5GHz_SUPPORT
+#if CONFIG_5GHz_SUPPORT
         else if ((bss_band & BAND_A) != 0U)
         {
             return (t_u8)(pmpriv->adapter->adhoc_start_band & BAND_AAC);
@@ -1334,7 +1182,7 @@ t_u8 wlan_11ac_bandconfig_allowed(mlan_private *pmpriv, t_u16 bss_band)
         {
             return (t_u8)(pmpriv->config_bands & BAND_GAC);
         }
-#ifdef CONFIG_5GHz_SUPPORT
+#if CONFIG_5GHz_SUPPORT
         else if ((bss_band & BAND_A) != 0U)
         {
             return (t_u8)(pmpriv->config_bands & BAND_AAC);

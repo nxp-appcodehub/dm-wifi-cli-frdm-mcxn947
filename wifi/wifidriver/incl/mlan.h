@@ -18,56 +18,47 @@ Change log:
 #ifndef _MLAN_H_
 #define _MLAN_H_
 
-#ifndef CONFIG_WIFI_INTERNAL
-#define CONFIG_WIFI_INTERNAL 1
+#include <wifi_config_default.h>
+
+#ifdef __ZEPHYR__
+#include "nxp_wifi.h"
 #endif
 
-#ifdef CONFIG_WIFI_INTERNAL
-#define CONFIG_MLAN_WMSDK              1
-#define CONFIG_11N                     1
-#define STA_SUPPORT                    1
-#define UAP_SUPPORT                    1
-#define WPA                            1
-#define KEY_MATERIAL_WEP               1
-#define KEY_PARAM_SET_V2               1
-#define ENABLE_802_11W                 1
-#define ENABLE_GCMP_SUPPORT            1
-#define CONFIG_STA_AMPDU_RX            1
-#define CONFIG_STA_AMPDU_TX            1
-#define CONFIG_ENABLE_AMSDU_RX         1
-#define CONFIG_UAP_AMPDU_TX            1
-#define CONFIG_UAP_AMPDU_RX            1
-#define CONFIG_WNM_PS                  1
-#define CONFIG_SCAN_CHANNEL_GAP        1
-#define CONFIG_COMBO_SCAN              1
-#define CONFIG_BG_SCAN                 1
-#define CONFIG_HOST_MLME               1
-#define UAP_HOST_MLME                  1
-#define CONFIG_WIFI_MAX_CLIENTS_CNT    1
-#define CONFIG_WIFI_RTS_THRESHOLD      1
-#define CONFIG_UAP_STA_MAC_ADDR_FILTER 1
-#define CONFIG_WIFI_FRAG_THRESHOLD     1
-#define CONFIG_WIFI_FORCE_RTS          1
-#define CONFIG_TX_AMPDU_PROT_MODE      1
+
+
+#ifndef __ZEPHYR__
+#if !CONFIG_STA_AUTO_DHCPV4
+#define CONFIG_STA_AUTO_DHCPV4 1
+#endif
 #endif
 
-#if !defined(SD8801)
-#define CONFIG_GTK_REKEY_OFFLOAD       1
+#ifndef __ZEPHYR__
+#if !CONFIG_WIFI_STA_RECONNECT
+#define CONFIG_WIFI_STA_RECONNECT 1
+#endif
 #endif
 
-#if defined(SD9177)
+#define CONFIG_GTK_REKEY_OFFLOAD 0
+
+
+#if defined(SD9177) || defined(IW610)
 #define CONFIG_TCP_ACK_ENH 1
 #define CONFIG_FW_VDLL     1
-#define CONFIG_WIFI_CAPA   1
+#if !CONFIG_WIFI_CAPA
+#define CONFIG_WIFI_CAPA 1
 #endif
 
-#ifdef CONFIG_11AX
+#if CONFIG_11AX
+#if !CONFIG_11K
 #define CONFIG_11K 1
+#endif
+#if !CONFIG_11V
 #define CONFIG_11V 1
-#ifndef CONFIG_WPA_SUPP
-#define CONFIG_DRIVER_MBO 1
 #endif
 #endif
+#endif
+
+#include <osa.h>
 
 #include "mlan_decl.h"
 #include "mlan_ioctl.h"

@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2016, Freescale Semiconductor, Inc.
  * Copyright 2016-2021 NXP
+ * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -19,10 +20,10 @@
  *****************************************************************************/
 
 /*! @name Driver version */
-/*@{*/
+/*! @{ */
 /*! @brief Driver version 2.8.4. */
 #define FSL_USDHC_DRIVER_VERSION (MAKE_VERSION(2U, 8U, 4U))
-/*@}*/
+/*! @} */
 
 /*! @brief Maximum block count can be set one time */
 #define USDHC_MAX_BLOCK_COUNT (USDHC_BLK_ATT_BLKCNT_MASK >> USDHC_BLK_ATT_BLKCNT_SHIFT)
@@ -825,7 +826,7 @@ void USDHC_Deinit(USDHC_Type *base);
  */
 bool USDHC_Reset(USDHC_Type *base, uint32_t mask, uint32_t timeout);
 
-/* @} */
+/*! @} */
 
 /*!
  * @name DMA Control
@@ -913,7 +914,7 @@ static inline void USDHC_EnableInternalDMA(USDHC_Type *base, bool enable)
     }
 }
 
-/* @} */
+/*! @} */
 
 /*!
  * @name Interrupts
@@ -964,7 +965,7 @@ static inline void USDHC_DisableInterruptSignal(USDHC_Type *base, uint32_t mask)
     base->INT_SIGNAL_EN &= ~mask;
 }
 
-/* @} */
+/*! @} */
 
 /*!
  * @name Status
@@ -1041,7 +1042,7 @@ static inline uint32_t USDHC_GetPresentStatusFlags(USDHC_Type *base)
     return base->PRES_STATE;
 }
 
-/* @} */
+/*! @} */
 
 /*!
  * @name Bus Operations
@@ -1592,7 +1593,7 @@ void USDHC_SetDataConfig(USDHC_Type *base,
                          usdhc_transfer_direction_t dataDirection,
                          uint32_t blockCount,
                          uint32_t blockSize);
-/* @} */
+/*! @} */
 
 /*!
  * @name Transactional functions
@@ -1694,7 +1695,7 @@ status_t USDHC_TransferBlocking(USDHC_Type *base, usdhc_adma_config_t *dmaConfig
  */
 void USDHC_TransferHandleIRQ(USDHC_Type *base, usdhc_handle_t *handle);
 
-/* @} */
+/*! @} */
 
 #if defined(__cplusplus)
 }

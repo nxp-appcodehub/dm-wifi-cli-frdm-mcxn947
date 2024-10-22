@@ -42,30 +42,19 @@ There are the options:
 7. [Release Notes](#step7)
 
 ## 1. Software<a name="step1"></a>
-- [MCUXpresso 11.9.0 or newer.](https://nxp.com/mcuxpresso)
-- [MCUXpresso for VScode 1.5.61 or newer](https://www.nxp.com/products/processors-and-microcontrollers/arm-microcontrollers/general-purpose-mcus/lpc800-arm-cortex-m0-plus-/mcuxpresso-for-visual-studio-code:MCUXPRESSO-VSC?cid=wechat_iot_303216)
+- [MCUXpresso 24.9.25 or newer.](https://nxp.com/mcuxpresso)
+- [MCUXpresso for VScode 24.10.78 or newer](https://www.nxp.com/products/processors-and-microcontrollers/arm-microcontrollers/general-purpose-mcus/lpc800-arm-cortex-m0-plus-/mcuxpresso-for-visual-studio-code:MCUXPRESSO-VSC?cid=wechat_iot_303216)
 - [SDK for FRDM-MCXN947.](https://mcuxpresso.nxp.com/en/select)
 
 ## 2. Hardware<a name="step2"></a>
 - [FRDM MCXN947](https://www.nxp.com/design/design-center/development-boards-and-designs/general-purpose-mcus/frdm-development-board-for-mcx-n94-n54-mcus:FRDM-MCXN947)   
-[<img src="Images/MCXN947.png" width="300"/>](Images/MCXN947.png)
-- [FRDM-IW416-AW-AM510](https://www.azurewave.com/wireless-modules-nxp.html)   
+[<img src="Images/MCXN947.png" width="400"/>](Images/MCXN947.png)
+- [FRDM-IW416-AW-AM510](https://www.nxp.com/products/wireless-connectivity/wi-fi-plus-bluetooth-plus-802-15-4/2-4-5-ghz-dual-band-1x1-wi-fi-4-802-11n-plus-bluetooth-5-2-solution:IW416)   
 [<img src="Images/FRDM-IW416-AW-AM510.png" width="200"/>](Images/FRDM-IW416-AW-AM510.png)
 
 ## 3. Setup<a name="step3"></a>
 
-### 3.1 Step 1
-1. Open MCUXpresso IDE, in the Quick Start Panel, choose Import from Application Code Hub   
-[<img src="Images/import_project_1.png" width="300"/>](Images/import_project_1.png)
-
-2. Enter the demo name in the search bar.    
-[<img src="Images/import_project_2.png" width="300"/>](Images/import_project_2.png)
-3. Click Copy GitHub link, MCUXpresso IDE will automatically retrieve project attributes, then click Next>.    
-[<img src="Images/import_project_3.png" width="300"/>](Images/import_project_3.png)
-4. Select main branch and then click Next>, Select the MCUXpresso project, click Finish button to complete import.    
-[<img src="Images/import_project_4.png" width="300"/>](Images/import_project_4.png)
-
-### 3.2 Prepare demo
+### 3.1 Prepare demo
 1.  Connect a USB type C cable between the PC host and the CMSIS DAP USB port on the board
 2.  Open a serial terminal with the following settings:
     - 115200 baud rate
@@ -85,315 +74,108 @@ There are the options:
 1. Add CLI init API in applications main function.
 2. Add WLAN CLI init API once WLAN Connection Manager gets initialized correctly.
 3. When the demo starts, a welcome message would appear on the terminal, press enter for command prompt:
-   Press tab or type help to list out all available CLI commands.
+```
+  ========================================
+  wifi cli demo
+  ========================================
+  Initialize CLI
+  ========================================
+  CLI Build: Jan 23 2025 [08:07:52]
+  Copyright  2024  NXP
+  MCU Board: MCX-N9XX-EVK
+  ========================================
+  Initialize WLAN Driver
+  ========================================
+  STA MAC Address: 1C:CE:51:96:D5:FD
+  app_cb: WLAN initialized
+  ========================================
+  WLAN CLIs are initialized
+  ========================================
+  ENHANCED WLAN CLIs are initialized
+  ========================================
+  CLIs Available:
+  ========================================
+```
+Type help to list out all available CLI commands.
+```
+  help
+  clear
+  wlan-version
+  wlan-mac
+  wlan-thread-info
+  wlan-net-stats
+  wlan-set-mac <MAC_Address>
+  wlan-scan
+  wlan-scan-opt ssid <ssid> bssid ...
+  wlan-add <profile_name> ssid <ssid> bssid...
+  wlan-remove <profile_name>
+  wlan-list
+  wlan-connect <profile_name>
+  wlan-connect-opt <profile_name> ...
+  wlan-reassociate
+  wlan-start-network <profile_name>
+  wlan-stop-network
+  wlan-disconnect
+  wlan-stat
+  wlan-info
+  wlan-address
+  wlan-uap-disconnect-sta <mac address>
+  wlan-get-uap-channel
+  wlan-get-uap-sta-list
+  wlan-ieee-ps <0/1>
+  wlan-set-ps-cfg <null_pkt_interval>
+  wlan-deep-sleep-ps <0/1>
+  wlan-get-beacon-interval
+  wlan-wnm-ps <0/1> <sleep_interval>
+  wlan-set-max-clients-count <max clients count>
+  wlan-rts <sta/uap> <rts threshold>
+  wlan-host-11k-enable <0/1>
+  wlan-host-11k-neighbor-req [ssid <ssid>]
+  wlan-host-11v-bss-trans-query <0..16>
+  wlan-roaming <0/1> <rssi_threshold>
+  wlan-multi-mef <ping/arp/multicast/del> [<action>]
+  wlan-send-hostcmd
+  wlan-set-uap-bandwidth <1/2> 1:20 MHz 2:40MHz
+  wlan-set-uap-hidden-ssid <0/1/2>
+  wlan-eu-crypto-rc4 <EncDec>
+  wlan-eu-crypto-aes-wrap <EncDec>
+  wlan-eu-crypto-aes-ecb <EncDec>
+  wlan-eu-crypto-ccmp-128 <EncDec>
+  wlan-ft-roam <bssid> <channel>
+  wlan-set-antcfg <ant mode> [evaluate_time]
+  wlan-get-antcfg
+  wlan-scan-channel-gap <channel_gap_value>
+  wlan-reset
+  wlan-set-regioncode <region-code>
+  wlan-get-regioncode
+  wlan-11d-enable <sta/uap> <0/1>
+  wlan-rssi-low-threshold <threshold_value>
+  wlan-get-signal
+  wlan-set-bandcfg
+  wlan-get-bandcfg
+  wlan-set-su <0/1>
+  wlan-set-multiple-dtim <value>
+  wlan-cloud-keep-alive <start/stop/reset>
+  wlan_tcp_client dst_ip <dst_ip> src_port <src_port> dst_port <dst_port>
+  wlan-set-country <country_code_str>
+  wlan-set-country-ie-ignore <0/1>
+  wlan-get-txpwrlimit <subband>
+  wlan-set-txpwrlimit
+  wlan-set-chanlist-and-txpwrlimit
+  wlan-set-chanlist
+  wlan-get-chanlist
+  wlan-set-txratecfg <sta/uap> <format> <index> <autoTx_set>
+  wlan-get-txratecfg <sta/uap>
+  wlan-get-data-rate <sta/uap>
+  wlan-get-pmfcfg
+  wlan-uap-get-pmfcfg
+  wlan-set-ed-mac-mode <interface> <ed_ctrl_2g> <ed_offset_2g> <ed_ctrl_5g> <ed_offset_5g>
+  wlan-get-ed-mac-mode <interface>
+  ping [-s <packet_size>] [-c <packet_count>] [-W <timeout in sec>] <ipv4/ipv6 address>
+  iperf [-s|-c <host>|-a|-h] [options]
+  dhcp-stat
+```
 
-      wifi cli demo
-    Initialize WLAN Driver
-    MAC Address: C0:E4:34:5A:98:E9
-    host init done
-    [net] Initialized TCP/IP networking stack
-    mass storage device attached:pid=0x5567vid=0x781 address=1
-    app_cb: WLAN: received event 10
-    app_cb: WLAN initialized
-    WLAN CLIs are initialized
-    CLIs Available:
-
-    help
-    wlan-version
-    wlan-mac
-    wlan-scan
-    wlan-scan-opt ssid <ssid> bssid ...
-    wlan-add <profile_name> ssid <ssid> bssid...
-    wlan-remove <profile_name>
-    wlan-list
-    wlan-connect <profile_name>
-    wlan-start-network <profile_name>
-    wlan-stop-network
-    wlan-disconnect
-    wlan-stat
-    wlan-info
-    wlan-address
-    wlan-get-uap-channel
-    wlan-get-uap-sta-list
-    ping [-s <packet_size>] [-c <packet_count>] [-W <timeout in sec>] <ip_address>
-    iperf [-s|-c <host>|-a|-h] [options]
-    dhcp-stat
-
-    #help wlan-version wlan-mac wlan-scan wlan-scan-opt wlan-add wlan-remove wlan-list
-
-    #help
-    ~~~
-    help
-    wlan-version
-    wlan-mac
-    wlan-scan
-    wlan-scan-opt ssid <ssid> bssid ...
-    wlan-add <profile_name> ssid <ssid> bssid...
-    wlan-remove <profile_name>
-    wlan-list
-    wlan-connect <profile_name>
-    wlan-start-network <profile_name>
-    wlan-stop-network
-    wlan-disconnect
-    wlan-stat
-    wlan-info
-    wlan-address
-    wlan-get-uap-channel
-    wlan-get-uap-sta-list
-    ping [-s <packet_size>] [-c <packet_count>] [-W <timeout in sec>] <ip_address>
-    iperf [-s|-c <host>|-a|-h] [options]
-    dhcp-stat
-    ~~~
-
-    #wlan - version
-      WLAN Driver Version   : v1.3.r21.p1
-      WLAN Firmware Version : w8977o-V2, RF87XX, FP91, 16.91.10.p89, WPA2_CVE_FIX 1, PVE_FIX 1
-
-    #wlan - mac
-      MAC address
-      C0:E4:34:5A:99:45
-
-    #wlan - scan
-      Scan scheduled...
-
-    # 3 networks found:
-     ~~~
-      94:10:3E:02:60:F0  "nxp_mrvl" Infra
-              channel: 1
-              rssi: -25 dBm
-              security: OPEN
-              WMM: YES
-      94:10:3E:02:60:F1  "nxp_mrvl_5ghz" Infra
-              channel: 36
-              rssi: -39 dBm
-              security: OPEN
-              WMM: YES
-      90:72:40:21:B3:1A  "apple_g" Infra
-              channel: 11
-              rssi: -51 dBm
-              security: WPA2
-              WMM: YES
-      ~~~~
-
-    #wlan - scan - opt
-      Usage:
-          wlan-scan-opt ssid <ssid> bssid <bssid> channel <channel> probes <probes>
-      Error: invalid number of arguments
-
-    #wlan - scan - opt ssid apple_g
-      Scan for ssid "apple_g" scheduled...
-
-    # 2 networks found:
-    ~~~~
-      90:72:40:21:B3:1A  "apple_g" Infra
-              channel: 11
-              rssi: -52 dBm
-              security: WPA2
-              WMM: YES
-      90:72:40:21:B3:1B  "apple_g" Infra
-              channel: 149
-              rssi: -60 dBm
-              security: WPA2
-              WMM: YES
-    ~~~~
-
-    #wlan - add
-    ~~~~
-      Usage:
-      For Station interface
-        For DHCP IP Address assignment:
-          wlan-add <profile_name> ssid <ssid> [wpa2 <secret>]
-          wlan-add <profile_name> ssid <ssid> [owe_only]
-          wlan-add <profile_name> ssid <ssid> [wpa3 sae] <secret>
-        For static IP address assignment:
-          wlan-add <profile_name> ssid <ssid>
-          ip:<ip_addr>,<gateway_ip>,<netmask>
-          [bssid <bssid>] [channel <channel number>]
-          [wpa2 <secret>]
-      For Micro-AP interface
-          wlan-add <profile_name> ssid <ssid>
-          ip:<ip_addr>,<gateway_ip>,<netmask>
-          role uap [bssid <bssid>]
-          [channel <channelnumber>]
-          [wpa2 <secret>]
-      Error: invalid number of arguments
-    ~~~~
-
-    #wlan - add abc ssid nxp_mrvl
-      Added "abc"
-
-    #wlan - connect abc
-      Connecting to network...
-      Use 'wlan-stat' for current connection status.
-
-    #Connected to following BSS : SSID = [nxp_mrvl], IP = [192.168.10.152]
-
-    #wlan - stat
-    ~~~
-      Station connected (Active)
-      uAP stopped
-    ~~~
-
-    #wlan - info
-    ~~~
-      Station connected to:
-      "abc"
-              SSID: nxp_mrvl
-              BSSID: 94:10:3E:02:60:F0
-              channel: 1
-              role: Infra
-              security: none
-
-              IPv4 Address
-              address: DHCP
-                      IP:             192.168.10.152
-                      gateway:        192.168.10.1
-                      netmask:        255.255.255.0
-                      dns1:           192.168.10.1
-                      dns2:           0.0.0.0
-      uAP not started
-    ~~~
-    #
-    #wlan - add abd ssid NXP_Soft_AP ip : 192.168.10.1, 192.168.10.1, 255.255.255.0 role uap wpa2 12345678
-      Added "abd"
-
-    #wlan - start - network abd
-    ~~~
-      Soft AP "NXP_Soft_AP" Started successfully
-      DHCP Server started successfully
-    ~~~
-
-    #wlan - info
-    ~~~
-      Station connected to:
-      "abc"
-              SSID: nxp_mrvl
-              BSSID: 94:10:3E:02:60:F0
-              channel: 1
-              role: Infra
-              security: none
-
-              IPv4 Address
-              address: DHCP
-                      IP:             192.168.10.152
-                      gateway:        192.168.10.1
-                      netmask:        255.255.255.0
-                      dns1:           192.168.10.1
-                      dns2:           0.0.0.0
-      uAP started as:
-      "abd"
-              SSID: NXP_Soft_AP
-              BSSID: C0:E4:34:5A:99:45
-              channel: 1
-              role: uAP
-              security: WPA2
-
-              IPv4 Address
-              address: STATIC
-                      IP:             192.168.10.1
-                      gateway:        192.168.10.1
-                      netmask:        255.255.255.0
-                      dns1:           192.168.10.1
-                      dns2:           0.0.0.0
-    ~~~
-    #
-    #wlan - disconnect
-
-    #Dis - connected from : nxp_mrvl
-    ~~~
-      [wlcm] Warn: got event: deauthentication
-    ~~~
-
-    #wlan - info
-    ~~~
-      Station not connected
-      uAP started as:
-      "abd"
-              SSID: NXP_Soft_AP
-              BSSID: C0:E4:34:5A:99:45
-              channel: (Auto)
-              role: uAP
-              security: WPA2
-
-              IPv4 Address
-              address: STATIC
-                      IP:             192.168.10.1
-                      gateway:        192.168.10.1
-                      netmask:        255.255.255.0
-                      dns1:           192.168.10.1
-                      dns2:           0.0.0.0
-     ~~~
-    #
-
-    #wlan - list
-    ~~~
-      2 networks:
-      "abc"
-              SSID: nxp_mrvl
-              BSSID: 00:00:00:00:00:00
-              channel: (Auto)
-              role: Infra
-              security: none
-      "abd"
-              SSID: NXP_Soft_AP
-              BSSID: 00:00:00:00:00:00
-              channel: (Auto)
-              role: uAP
-              security: WPA2
-
-              IPv4 Address
-              address: STATIC
-                      IP:             192.168.10.1
-                      gateway:        192.168.10.1
-                      netmask:        255.255.255.0
-                      dns1:           192.168.10.1
-                      dns2:           0.0.0.0
-    ~~~
-    #
-
-    #wlan - remove abc
-    ~~~
-      Removed "abc"
-    ~~~
-
-    #wlan - list
-    ~~~
-      1 network:
-      "abd"
-              SSID: NXP_Soft_AP
-              BSSID: 00:00:00:00:00:00
-              channel: (Auto)
-              role: uAP
-              security: WPA2
-
-              IPv4 Address
-              address: STATIC
-                      IP:             192.168.10.1
-                      gateway:        192.168.10.1
-                      netmask:        255.255.255.0
-                      dns1:           192.168.10.1
-                      dns2:           0.0.0.0
-    ~~~
-    #
-    #
-
-    #wlan - address
-    ~~~
-      not connected
-    ~~~
-
-    #wlan - get
-
-    #wlan - get - uap - channel
-    ~~~
-      uAP channel: 0
-    ~~~
-
-    #
-
-    #dhcp - stat
-    DHCP Server Lease Duration : 86400 seconds
-    No IP-MAC mapping stored
 
 ## 5. FAQs<a name="step5"></a>
 No FAQs have been identified for this project.
@@ -426,5 +208,12 @@ Questions regarding the content/correctness of this example can be entered as Is
 ## 7. Release Notes<a name="step7"></a>
 | Version | Description / Update                           | Date                        |
 |:-------:|------------------------------------------------|----------------------------:|
-| 1.0     | Initial release on Application Code Hub        | March 26<sup>th</sup> 2024 |
+| 2.0     | Second release on Application Code Hub        | December 30<sup>th</sup> 2024 |
 
+<small>
+<b>Trademarks and Service Marks</b>: There are a number of proprietary logos, service marks, trademarks, slogans and product designations ("Marks") found on this Site. By making the Marks available on this Site, NXP is not granting you a license to use them in any fashion. Access to this Site does not confer upon you any license to the Marks under any of NXP or any third party's intellectual property rights. While NXP encourages others to link to our URL, no NXP trademark or service mark may be used as a hyperlink without NXP’s prior written permission. The following Marks are the property of NXP. This list is not comprehensive; the absence of a Mark from the list does not constitute a waiver of intellectual property rights established by NXP in a Mark.
+</small>
+<br>
+<small>
+NXP, the NXP logo, NXP SECURE CONNECTIONS FOR A SMARTER WORLD, Airfast, Altivec, ByLink, CodeWarrior, ColdFire, ColdFire+, CoolFlux, CoolFlux DSP, DESFire, EdgeLock, EdgeScale, EdgeVerse, elQ, Embrace, Freescale, GreenChip, HITAG, ICODE and I-CODE, Immersiv3D, I2C-bus logo , JCOP, Kinetis, Layerscape, MagniV, Mantis, MCCI, MIFARE, MIFARE Classic, MIFARE FleX, MIFARE4Mobile, MIFARE Plus, MIFARE Ultralight, MiGLO, MOBILEGT, NTAG, PEG, Plus X, POR, PowerQUICC, Processor Expert, QorIQ, QorIQ Qonverge, RoadLink wordmark and logo, SafeAssure, SafeAssure logo , SmartLX, SmartMX, StarCore, Symphony, Tower, TriMedia, Trimension, UCODE, VortiQa, Vybrid are trademarks of NXP B.V. All other product or service names are the property of their respective owners. © 2021 NXP B.V.
+</small>

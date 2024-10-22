@@ -72,18 +72,10 @@ static INLINE int wlan_wmm_list_len(pmlan_adapter pmadapter, pmlan_list_head hea
  */
 static INLINE t_void wlan_request_ralist_lock(pmlan_private priv)
 {
-#ifndef CONFIG_MLAN_WMSDK
-    mlan_adapter *pmadapter = priv->adapter;
-    mlan_callbacks *pcb     = (mlan_callbacks *)&pmadapter->callbacks;
-#endif
 
     ENTER();
 
-    os_mutex_get(&priv->tx_ba_stream_tbl_lock, OS_WAIT_FOREVER);
-#ifndef CONFIG_MLAN_WMSDK
-    /* Call MOAL spin lock callback function */
-    pcb->moal_spin_lock(pmadapter->pmoal_handle, priv->wmm.ra_list_spinlock);
-#endif
+    OSA_MutexLock((osa_mutex_handle_t)priv->tx_ba_stream_tbl_lock, osaWaitForever_c);
 
     LEAVE();
     return;
@@ -98,18 +90,11 @@ static INLINE t_void wlan_request_ralist_lock(pmlan_private priv)
  */
 static INLINE t_void wlan_release_ralist_lock(pmlan_private priv)
 {
-#ifndef CONFIG_MLAN_WMSDK
-    mlan_adapter *pmadapter = priv->adapter;
-    mlan_callbacks *pcb     = (mlan_callbacks *)&pmadapter->callbacks;
-#endif
 
     ENTER();
 
-    os_mutex_put(&priv->tx_ba_stream_tbl_lock);
-#ifndef CONFIG_MLAN_WMSDK
-    /* Call MOAL spin unlock callback function */
-    pcb->moal_spin_unlock(pmadapter->pmoal_handle, priv->wmm.ra_list_spinlock);
-#endif
+    OSA_MutexUnlock((osa_mutex_handle_t)priv->tx_ba_stream_tbl_lock);
+
 
     LEAVE();
     return;
@@ -160,7 +145,7 @@ void wlan_wmm_setup_queue_priorities(pmlan_private priv, IEEEtypes_WmmParameter_
 void wlan_wmm_setup_ac_downgrade(pmlan_private priv);
 /** select WMM queue */
 t_u8 wlan_wmm_select_queue(mlan_private *pmpriv, t_u8 tid);
-#ifdef UAP_SUPPORT
+#if UAP_SUPPORT
 t_void wlan_wmm_delete_peer_ralist(pmlan_private priv, t_u8 *mac);
 #endif
 
@@ -205,7 +190,7 @@ extern mlan_status wlan_cmd_wmm_delts_req(IN pmlan_private pmpriv, OUT HostCmd_D
 
 #endif /* STA_SUPPORT */
 
-#ifdef UAP_SUPPORT
+#if UAP_SUPPORT
 t_void wlan_wmm_delete_peer_ralist(pmlan_private priv, t_u8 *mac);
 #endif
 
@@ -218,7 +203,7 @@ mlan_status wlan_cmd_wmm_param_config(pmlan_private pmpriv,
 /* process wmm_param_config command response */
 mlan_status wlan_ret_wmm_param_config(pmlan_private pmpriv, const HostCmd_DS_COMMAND *resp, mlan_ioctl_req *pioctl_buf);
 
-#ifdef CONFIG_WMM
+#if CONFIG_WMM
 /* wmm enhance buffer pool */
 #define MAX_WMM_BUF_NUM 16
 #define WMM_DATA_LEN    1580
@@ -229,9 +214,9 @@ typedef struct
     mlan_linked_list entry;
     t_u8 intf_header[INTF_HEADER_LEN];
     TxPD tx_pd;
-#ifdef CONFIG_TX_RX_ZERO_COPY
+#if CONFIG_TX_RX_ZERO_COPY
     t_u8 eth_header[ETH_HDR_LEN];
-#ifdef AMSDU_IN_AMPDU
+#if CONFIG_AMSDU_IN_AMPDU
     t_u8 llc_header[LLC_SNAP_LEN];
 #endif
     /* Data payload pointer */

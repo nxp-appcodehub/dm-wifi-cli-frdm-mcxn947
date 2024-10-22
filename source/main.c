@@ -3,6 +3,7 @@
  *  @brief main file
  *
  *  Copyright 2020 NXP
+ *  All rights reserved.
  *
  *  SPDX-License-Identifier: BSD-3-Clause
  */
@@ -12,93 +13,63 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 // SDK Included Files
-#include "pin_mux.h"
-#include "clock_config.h"
 #include "board.h"
 #include "fsl_debug_console.h"
 #include "wlan_bt_fw.h"
 #include "wlan.h"
 #include "wifi.h"
 #include "wm_net.h"
-#include <wm_os.h>
+#include <osa.h>
+#if CONFIG_NXP_WIFI_SOFTAP_SUPPORT
 #include "dhcp-server.h"
+#endif
 #include "cli.h"
 #include "wifi_ping.h"
 #include "iperf.h"
+#include "app.h"
 #ifndef RW610
 #include "wifi_bt_config.h"
 #else
 #include "fsl_power.h"
-#include "fsl_pm_core.h"
-#include "fsl_pm_device.h"
-#include "fsl_rtc.h"
+#include "fsl_ocotp.h"
 #endif
 #include "cli_utils.h"
-#ifdef CONFIG_HOST_SLEEP
+#if CONFIG_HOST_SLEEP
 #include "host_sleep.h"
 #endif
 
-#include "fsl_common.h"
 /*******************************************************************************
  * Definitions
  ******************************************************************************/
-
 
 /*******************************************************************************
  * Prototypes
  ******************************************************************************/
 int wlan_driver_init(void);
-int wlan_driver_deinit(void);
-int wlan_driver_reset(void);
-int wlan_reset_cli_init(void);
+#if CONFIG_HOST_SLEEP
+int wlan_hs_cli_init(void);
+#endif
 
 /*******************************************************************************
  * Code
  ******************************************************************************/
 
-const int TASK_MAIN_PRIO = OS_PRIO_3;
-#ifdef CONFIG_WPS2
-const int TASK_MAIN_STACK_SIZE = 1500;
+#if CONFIG_WPS2
+#define MAIN_TASK_STACK_SIZE 6000
 #else
-const int TASK_MAIN_STACK_SIZE = 800;
+#define MAIN_TASK_STACK_SIZE 4096
 #endif
 
-portSTACK_TYPE *task_main_stack = NULL;
-TaskHandle_t task_main_task_handler;
-#ifdef RW610
-#ifdef CONFIG_POWER_MANAGER
-/* Global power manager handle */
-AT_ALWAYS_ON_DATA(pm_handle_t pm_handle);
-AT_ALWAYS_ON_DATA(pm_wakeup_source_t wlanWakeupSource);
-AT_ALWAYS_ON_DATA(pm_wakeup_source_t rtcWakeupSource);
-AT_ALWAYS_ON_DATA(pm_wakeup_source_t pin1WakeupSource);
-extern pm_notify_element_t wlan_notify;
-extern bool is_wakeup_cond_set;
-#define APP_PM2_CONSTRAINTS                                                                           \
-    6U, PM_RESC_SRAM_0K_384K_STANDBY, PM_RESC_SRAM_384K_448K_STANDBY, PM_RESC_SRAM_448K_512K_STANDBY, \
-        PM_RESC_SRAM_512K_640K_STANDBY, PM_RESC_SRAM_640K_896K_STANDBY, PM_RESC_SRAM_896K_1216K_STANDBY
-#define APP_PM3_CONSTRAINTS                                                                                 \
-    6U, PM_RESC_SRAM_0K_384K_RETENTION, PM_RESC_SRAM_384K_448K_RETENTION, PM_RESC_SRAM_448K_512K_RETENTION, \
-        PM_RESC_SRAM_512K_640K_RETENTION, PM_RESC_SRAM_640K_896K_RETENTION, PM_RESC_SRAM_896K_1216K_RETENTION
-#if defined(configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY)
-#ifndef POWER_MANAGER_RTC_PIN1_PRIORITY
-#define POWER_MANAGER_RTC_PIN1_PRIORITY (configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY + 1)
-#endif
-#else
-#ifndef POWER_MANAGER_RTC_PIN1_PRIORITY
-#define POWER_MANAGER_RTC_PIN1_PRIORITY (3U)
-#endif
-#endif
-#endif
-#endif
+static void main_task(osa_task_param_t arg);
+
+static OSA_TASK_DEFINE(main_task, WLAN_TASK_PRI_LOW, 1, MAIN_TASK_STACK_SIZE, 0);
+
+OSA_TASK_HANDLE_DEFINE(main_task_Handle);
 
 static void printSeparator(void)
 {
     PRINTF("========================================\r\n");
 }
-
-static struct wlan_network sta_network;
-static struct wlan_network uap_network;
 
 /* Callback Function passed to WLAN Connection Manager. The callback function
  * gets called when there are WLAN Events that need to be handled by the
@@ -108,9 +79,12 @@ int wlan_event_callback(enum wlan_event_reason reason, void *data)
 {
     int ret;
     struct wlan_ip_config addr;
+    char ssid[IEEEtypes_SSID_SIZE + 1] = {0};
     char ip[16];
     static int auth_fail                      = 0;
+#if CONFIG_NXP_WIFI_SOFTAP_SUPPORT
     wlan_uap_client_disassoc_t *disassoc_resp = data;
+#endif
 
     switch (reason)
     {
@@ -142,7 +116,18 @@ int wlan_event_callback(enum wlan_event_reason reason, void *data)
             }
             PRINTF("ENHANCED WLAN CLIs are initialized\r\n");
             printSeparator();
-
+#ifdef RW610
+#if CONFIG_HOST_SLEEP
+            ret = host_sleep_cli_init();
+            if (ret != WM_SUCCESS)
+            {
+                PRINTF("Failed to initialize WLAN CLIs\r\n");
+                return 0;
+            }
+            PRINTF("HOST SLEEP CLIs are initialized\r\n");
+            printSeparator();
+#endif
+#endif
             ret = ping_cli_init();
             if (ret != WM_SUCCESS)
             {
@@ -157,12 +142,14 @@ int wlan_event_callback(enum wlan_event_reason reason, void *data)
                 return 0;
             }
 
+#if CONFIG_NXP_WIFI_SOFTAP_SUPPORT
             ret = dhcpd_cli_init();
             if (ret != WM_SUCCESS)
             {
                 PRINTF("Failed to initialize DHCP Server CLI\r\n");
                 return 0;
             }
+#endif
 
             PRINTF("CLIs Available:\r\n");
             printSeparator();
@@ -186,7 +173,7 @@ int wlan_event_callback(enum wlan_event_reason reason, void *data)
 
             net_inet_ntoa(addr.ipv4.address, ip);
 
-            ret = wlan_get_current_network(&sta_network);
+            ret = wlan_get_current_network_ssid(ssid);
             if (ret != WM_SUCCESS)
             {
                 PRINTF("Failed to get External AP network\r\n");
@@ -194,12 +181,12 @@ int wlan_event_callback(enum wlan_event_reason reason, void *data)
             }
 
             PRINTF("Connected to following BSS:\r\n");
-            PRINTF("SSID = [%s]\r\n", sta_network.ssid);
+            PRINTF("SSID = [%s]\r\n", ssid);
             if (addr.ipv4.address != 0U)
             {
                 PRINTF("IPv4 Address: [%s]\r\n", ip);
             }
-#ifdef CONFIG_IPV6
+#if CONFIG_IPV6
             int i;
             for (i = 0; i < CONFIG_MAX_IPV6_ADDRESSES; i++)
             {
@@ -246,9 +233,10 @@ int wlan_event_callback(enum wlan_event_reason reason, void *data)
         case WLAN_REASON_CHAN_SWITCH:
             PRINTF("app_cb: WLAN: channel switch\r\n");
             break;
+#if CONFIG_NXP_WIFI_SOFTAP_SUPPORT
         case WLAN_REASON_UAP_SUCCESS:
             PRINTF("app_cb: WLAN: UAP Started\r\n");
-            ret = wlan_get_current_uap_network(&uap_network);
+            ret = wlan_get_current_uap_network_ssid(ssid);
 
             if (ret != WM_SUCCESS)
             {
@@ -257,7 +245,7 @@ int wlan_event_callback(enum wlan_event_reason reason, void *data)
             }
 
             printSeparator();
-            PRINTF("Soft AP \"%s\" started successfully\r\n", uap_network.ssid);
+            PRINTF("Soft AP \"%s\" started successfully\r\n", ssid);
             printSeparator();
             if (dhcp_server_start(net_get_uap_handle()))
                 PRINTF("Error in starting dhcp server\r\n");
@@ -293,7 +281,7 @@ int wlan_event_callback(enum wlan_event_reason reason, void *data)
         case WLAN_REASON_UAP_STOPPED:
             PRINTF("app_cb: WLAN: UAP Stopped\r\n");
             printSeparator();
-            PRINTF("Soft AP \"%s\" stopped successfully\r\n", uap_network.ssid);
+            PRINTF("Soft AP stopped successfully\r\n");
             printSeparator();
 
             dhcp_server_stop();
@@ -301,11 +289,12 @@ int wlan_event_callback(enum wlan_event_reason reason, void *data)
             PRINTF("DHCP Server stopped successfully\r\n");
             printSeparator();
             break;
+#endif /* CONFIG_NXP_WIFI_SOFTAP_SUPPORT */
         case WLAN_REASON_PS_ENTER:
             break;
         case WLAN_REASON_PS_EXIT:
             break;
-#ifdef CONFIG_SUBSCRIBE_EVENT_SUPPORT
+#if CONFIG_SUBSCRIBE_EVENT_SUPPORT
         case WLAN_REASON_RSSI_HIGH:
         case WLAN_REASON_SNR_LOW:
         case WLAN_REASON_SNR_HIGH:
@@ -319,11 +308,10 @@ int wlan_event_callback(enum wlan_event_reason reason, void *data)
         case WLAN_REASON_PRE_BEACON_LOST:
             break;
 #endif
-#ifdef CONFIG_WIFI_IND_DNLD
         case WLAN_REASON_FW_HANG:
         case WLAN_REASON_FW_RESET:
+            PRINTF("app_cb: WLAN: FW hang Event: %d\r\n", reason);
             break;
-#endif
         default:
             PRINTF("app_cb: WLAN: Unknown Event: %d\r\n", reason);
     }
@@ -334,6 +322,9 @@ int wlan_driver_init(void)
 {
     int result = 0;
 
+#if CONFIG_FW_DNLD_ASYNC
+    result = wlan_init_nb(wlan_fw_bin, wlan_fw_bin_len, wlan_event_callback);
+#else
     /* Initialize WIFI Driver */
     result = wlan_init(wlan_fw_bin, wlan_fw_bin_len);
 
@@ -342,70 +333,28 @@ int wlan_driver_init(void)
     result = wlan_start(wlan_event_callback);
 
     assert(0 == result);
-
+#endif
     return result;
 }
 
 #ifndef RW610
-int wlan_driver_deinit(void)
-{
-    int result = 0;
-
-    result = wlan_stop();
-    assert(0 == result);
-    wlan_deinit(0);
-
-    return result;
-}
-
-static void wlan_hw_reset(void)
-{
-    BOARD_WIFI_BT_Enable(false);
-    os_thread_sleep(1);
-    BOARD_WIFI_BT_Enable(true);
-}
-
-int wlan_driver_reset(void)
-{
-    int result = 0;
-
-    result = wlan_driver_deinit();
-    assert(0 == result);
-
-    wlan_hw_reset();
-
-    result = wlan_driver_init();
-    assert(0 == result);
-
-    return result;
-}
-
-static void test_wlan_reset(int argc, char **argv)
-{
-    (void)wlan_driver_reset();
-}
-
-#ifdef CONFIG_HOST_SLEEP
+#if CONFIG_HOST_SLEEP
 static void test_mcu_suspend(int argc, char **argv)
 {
     (void)mcu_suspend();
 }
-#endif
 
-static struct cli_command reset_commands[] = {
-    {"wlan-reset", NULL, test_wlan_reset},
-#ifdef CONFIG_HOST_SLEEP
+static struct cli_command hs_commands[] = {
     {"mcu-suspend", NULL, test_mcu_suspend},
-#endif
 };
 
-int wlan_reset_cli_init(void)
+int wlan_hs_cli_init(void)
 {
     unsigned int i;
 
-    for (i = 0; i < sizeof(reset_commands) / sizeof(struct cli_command); i++)
+    for (i = 0; i < sizeof(hs_commands) / sizeof(struct cli_command); i++)
     {
-        if (cli_register_command(&reset_commands[i]) != 0)
+        if (cli_register_command(&hs_commands[i]) != 0)
         {
             return -1;
         }
@@ -414,151 +363,9 @@ int wlan_reset_cli_init(void)
     return 0;
 }
 #endif
-
-#ifdef RW610
-#ifdef CONFIG_POWER_MANAGER
-void powerManager_StartRtcTimer(uint64_t timeOutUs)
-{
-    uint32_t currSeconds;
-
-    PM_EnableWakeupSource(&rtcWakeupSource);
-    /* Read the RTC seconds register to get current time in seconds */
-    currSeconds = RTC_GetSecondsTimerCount(RTC);
-    /* Add alarm seconds to current time */
-    currSeconds += (timeOutUs + 999999U) / 1000000U;
-    /* Set alarm time in seconds */
-    RTC_SetSecondsTimerMatch(RTC, currSeconds);
-}
-
-void powerManager_StopRtcTimer()
-{
-    RTC_ClearStatusFlags(RTC, kRTC_AlarmFlag);
-    PM_DisableWakeupSource(&rtcWakeupSource);
-}
-
-void RTC_IRQHandler()
-{
-    if (RTC_GetStatusFlags(RTC) & kRTC_AlarmFlag)
-    {
-        RTC_ClearStatusFlags(RTC, kRTC_AlarmFlag);
-        PM_DisableWakeupSource(&rtcWakeupSource);
-        wakeup_by = WAKEUP_BY_RTC;
-    }
-}
-
-void PIN1_INT_IRQHandler()
-{
-    POWER_ConfigWakeupPin(kPOWER_WakeupPin1, kPOWER_WakeupEdgeHigh);
-    NVIC_ClearPendingIRQ(PIN1_INT_IRQn);
-    DisableIRQ(PIN1_INT_IRQn);
-    POWER_ClearWakeupStatus(PIN1_INT_IRQn);
-    POWER_DisableWakeup(PIN1_INT_IRQn);
-    wakeup_by = WAKEUP_BY_PIN1;
-}
-
-void powerManager_RTC_Init()
-{
-    DisableIRQ(RTC_IRQn);
-    POWER_ClearWakeupStatus(RTC_IRQn);
-    POWER_DisableWakeup(RTC_IRQn);
-    RTC_Init(RTC);
-    /* Enable wakeup in PD mode */
-    RTC_EnableAlarmTimerInterruptFromDPD(RTC, true);
-    /* Start RTC */
-    RTC_ClearStatusFlags(RTC, kRTC_AlarmFlag);
-    RTC_StartTimer(RTC);
-    /* Register RTC timer callbacks in power manager */
-    PM_RegisterTimerController(&pm_handle, powerManager_StartRtcTimer, powerManager_StopRtcTimer, NULL, NULL);
-}
-
-void powerManager_Wakeupsource_Init()
-{
-    memset(&wlanWakeupSource, 0x0, sizeof(pm_wakeup_source_t));
-    memset(&rtcWakeupSource, 0x0, sizeof(pm_wakeup_source_t));
-    memset(&pin1WakeupSource, 0x0, sizeof(pm_wakeup_source_t));
-    /* Init WLAN wakeup source. Power manager API PM_InitWakeupSource()
-     * can't be called to init WLAN wakeup source since RW610 use IMU
-     * interrupt to wakeup host and can't be disabled here.
-     */
-    wlanWakeupSource.wsId    = WL_MCI_WAKEUP0_IRQn;
-    wlanWakeupSource.service = NULL;
-    wlanWakeupSource.enabled = false;
-    wlanWakeupSource.active  = false;
-    POWER_ClearWakeupStatus(WL_MCI_WAKEUP0_IRQn);
-    POWER_DisableWakeup(WL_MCI_WAKEUP0_IRQn);
-    /* Init other wakeup sources. Corresponding IRQ numbers act as wsId here. */
-    PM_InitWakeupSource(&rtcWakeupSource, RTC_IRQn, NULL, false);
-    PM_InitWakeupSource(&pin1WakeupSource, PM_WSID_WAKEUP_PIN1_LOW_LEVEL, NULL, false);
-}
-
-void powerManager_WakeupSourceDump()
-{
-    if (wakeup_by == 0x1)
-        PRINTF("Woken up by WLAN\r\n");
-    if (wakeup_by == 0x2)
-        PRINTF("Woken up by RTC\r\n");
-    if (wakeup_by == 0x4)
-        PRINTF("Woken up by PIN1\r\n");
-}
-
-void powerManager_EnterLowPower()
-{
-    /* Check is_wakeup_cond_set first, as wakelcok will be deleted in wlan-reset 0 */
-    if (is_wakeup_cond_set && pm_handle.enable && !wakelock_isheld())
-    {
-#ifdef CONFIG_RW610_A1
-        PM_SetConstraints(PM_LP_STATE_PM3, APP_PM3_CONSTRAINTS);
-#else
-        PM_SetConstraints(PM_LP_STATE_PM2, APP_PM2_CONSTRAINTS);
-#endif
-        /* Enable PIN1 as wakeup sources */
-        PM_EnableWakeupSource(&pin1WakeupSource);
-        /* duration unit is us here */
-        PM_EnterLowPower(60000000);
-        powerManager_WakeupSourceDump();
-        wakeup_by = 0;
-        /* Exit low power and reset constraints */
-#ifdef CONFIG_RW610_A1
-        PM_ReleaseConstraints(PM_LP_STATE_PM3, APP_PM3_CONSTRAINTS);
-#else
-        PM_ReleaseConstraints(PM_LP_STATE_PM2, APP_PM2_CONSTRAINTS);
-#endif
-    }
-}
-
-void powerManager_Init()
-{
-    uint32_t resetSrc;
-    power_init_config_t initCfg = {
-        /* VCORE AVDD18 supplied from iBuck on RD board. */
-        .iBuck = true,
-        /* CAU_SOC_SLP_REF_CLK not needed. */
-        .gateCauRefClk = true,
-    };
-    POWER_InitPowerConfig(&initCfg);
-    resetSrc = POWER_GetResetCause();
-    PRINTF("\r\nMCU wakeup source 0x%x...\r\n", resetSrc);
-    /* In case PM3/PM4 wakeup, the wakeup config and status need to be cleared */
-    POWER_ClearResetCause(resetSrc);
-
-    PM_CreateHandle(&pm_handle);
-    /* Init and start RTC time counter */
-    powerManager_RTC_Init();
-    /* Set priority of RTC and PIN1 interrupt */
-    NVIC_SetPriority(RTC_IRQn, POWER_MANAGER_RTC_PIN1_PRIORITY);
-    NVIC_SetPriority(PIN1_INT_IRQn, POWER_MANAGER_RTC_PIN1_PRIORITY);
-    /* Register WLAN notifier */
-    PM_RegisterNotify(kPM_NotifyGroup0, &wlan_notify);
-    /* Init WLAN wakeup source */
-    powerManager_Wakeupsource_Init();
-    PM_EnablePowerManager(true);
-    os_setup_idle_function(powerManager_EnterLowPower);
-    wakeup_by = 0;
-}
-#endif
 #endif
 
-void task_main(void *param)
+static void main_task(osa_task_param_t arg)
 {
     int32_t result = 0;
     (void)result;
@@ -570,21 +377,11 @@ void task_main(void *param)
 
     assert(WM_SUCCESS == result);
 
+#if CONFIG_HOST_SLEEP
 #ifndef RW610
-    result = wlan_reset_cli_init();
-
-    assert(WM_SUCCESS == result);
-#endif
-
-#ifdef CONFIG_HOST_SLEEP
     hostsleep_init(wlan_hs_pre_cfg, wlan_hs_post_cfg);
-#endif
-
-#ifdef RW610
-#ifdef CONFIG_POWER_MANAGER
-    PRINTF("Initialize Power Manager\r\n");
-    powerManager_Init();
-    printSeparator();
+#else
+    hostsleep_init();
 #endif
 #endif
 
@@ -596,33 +393,29 @@ void task_main(void *param)
 
     assert(WM_SUCCESS == result);
 
+#ifndef RW610
+#if CONFIG_HOST_SLEEP
+    result = wlan_hs_cli_init();
+
+    assert(WM_SUCCESS == result);
+#endif
+#endif
+
     while (1)
     {
         /* wait for interface up */
-        os_thread_sleep(os_msec_to_ticks(5000));
+        OSA_TimeDelay(5000);
     }
 }
 
 /*******************************************************************************
  * Prototypes
  ******************************************************************************/
-
 int main(void)
 {
-    BaseType_t result = 0;
-    (void)result;
+    OSA_Init();
 
-    /* attach FRO 12M to FLEXCOMM4 (debug console) */
-    CLOCK_SetClkDiv(kCLOCK_DivFlexcom4Clk, 1u);
-    CLOCK_AttachClk(BOARD_DEBUG_UART_CLK_ATTACH);
-
-    /* attach FRO HF to USDHC */
-    CLOCK_SetClkDiv(kCLOCK_DivUSdhcClk, 1u);
-    CLOCK_AttachClk(kFRO_HF_to_USDHC);
-
-    BOARD_InitBootPins();
-    BOARD_InitBootClocks();
-    BOARD_InitDebugConsole();
+    BOARD_InitHardware();
 #ifdef RW610
     POWER_PowerOffBle();
 #endif
@@ -631,11 +424,9 @@ int main(void)
     PRINTF("wifi cli demo\r\n");
     printSeparator();
 
-    result =
-        xTaskCreate(task_main, "main", TASK_MAIN_STACK_SIZE, task_main_stack, TASK_MAIN_PRIO, &task_main_task_handler);
-    assert(pdPASS == result);
+    (void)OSA_TaskCreate((osa_task_handle_t)main_task_Handle, OSA_TASK(main_task), NULL);
 
-    vTaskStartScheduler();
-    for (;;)
-        ;
+    OSA_Start();
+
+    return 0;
 }

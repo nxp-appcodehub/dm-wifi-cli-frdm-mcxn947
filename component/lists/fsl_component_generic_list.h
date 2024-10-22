@@ -1,6 +1,5 @@
 /*
  * Copyright 2018-2020, 2022 NXP
- * All rights reserved.
  *
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -210,7 +209,7 @@ uint32_t LIST_GetSize(list_handle_t list);
  */
 uint32_t LIST_GetAvailableSize(list_handle_t list);
 
-/* @} */
+/*! @} */
 
 #if defined(__cplusplus)
 }

@@ -1,14 +1,12 @@
 /*
- *  Copyright 2008-2022 NXP
+ *  Copyright 2008-2022, 2024 NXP
  *
  *  SPDX-License-Identifier: BSD-3-Clause
  *
  */
-
-/*! \file wifi-decl.h
- * \brief Wifi structure declarations
+/*!\file wifi-decl.h
+ *\brief This file provieds Wi-Fi structure declarations
  */
-
 #ifndef __WIFI_DECL_H__
 #define __WIFI_DECL_H__
 
@@ -31,14 +29,14 @@
 
 #define MOD_GROUPS 7
 
-#ifdef CONFIG_OWE
+#if CONFIG_DRIVER_OWE
 /** The open AP in OWE transmition Mode */
 #define OWE_TRANS_MODE_OPEN 1U
 /** The security AP in OWE trsnsition Mode */
 #define OWE_TRANS_MODE_OWE 2U
 #endif
 
-#ifdef CONFIG_WIFI_CAPA
+#if CONFIG_WIFI_CAPA
 #define WIFI_SUPPORT_11AX   (1 << 3)
 #define WIFI_SUPPORT_11AC   (1 << 2)
 #define WIFI_SUPPORT_11N    (1 << 1)
@@ -159,7 +157,10 @@ typedef struct
 /** BSS type : UAP */
 #define BSS_TYPE_UAP 1U
 
-#define UAP_DEFAULT_CHANNEL 0
+#define UAP_DEFAULT_CHANNEL       0
+#define UAP_DEFAULT_BANDWIDTH     2
+#define UAP_DEFAULT_BEACON_PERIOD 100
+#define UAP_DEFAULT_HIDDEN_SSID   0
 
 enum wifi_bss_security
 {
@@ -183,14 +184,6 @@ struct wifi_message
     void *data;
 };
 
-#ifdef CONFIG_P2P
-struct wifi_wfd_event
-{
-    bool peer_event;
-    bool action_frame;
-    void *data;
-};
-#endif
 
 /* Wlan Cipher structure */
 typedef struct
@@ -252,8 +245,6 @@ typedef struct
     uint32_t wpa3_sae : 1;
     /** 802.1x */
     uint32_t wpa2_entp : 1;
-    /** 802.1x sha256 */
-    uint32_t wpa2_entp_sha256 : 1;
     /** FT 802.1x */
     uint32_t ft_1x : 1;
     /** FT 802.1x sha384 */
@@ -262,6 +253,8 @@ typedef struct
     uint32_t ft_psk : 1;
     /** FT SAE */
     uint32_t ft_sae : 1;
+    /** WPA3 Enterprise */
+    uint32_t wpa3_entp : 1;
     /** WPA3 802.1x sha256 */
     uint32_t wpa3_1x_sha256 : 1;
     /** WPA3 802.1x sha384 */
@@ -284,20 +277,21 @@ struct wifi_scan_result2
     uint8_t bssid[MLAN_MAC_ADDR_LENGTH]; /*!< BSSID array */
     bool is_ibss_bit_set;                /*!< Is bssid set? */
 
-    uint8_t ssid[MLAN_MAX_SSID_LENGTH]; /*!< ssid array */
-    int ssid_len;                       /*!< SSID length */
-    uint8_t Channel;                    /*!< Channel associated to the BSSID */
-    uint8_t RSSI;                       /*!< Received signal strength */
-    uint16_t beacon_period;             /*!< Beacon period */
-    uint16_t dtim_period;               /*!< DTIM period */
-    _SecurityMode_t WPA_WPA2_WEP;       /*!< Security mode info */
-    _Cipher_t wpa_mcstCipher;           /*!< WPA multicast cipher */
-    _Cipher_t wpa_ucstCipher;           /*!< WPA unicast cipher */
-    _Cipher_t rsn_mcstCipher;           /*!< No security multicast cipher */
-    _Cipher_t rsn_ucstCipher;           /*!< No security unicast cipher */
-    bool is_pmf_required;               /*!< Is pmf required flag */
-    t_u8 ap_mfpc;                       /*!< MFPC bit of AP */
-    t_u8 ap_mfpr;                       /*!< MFPR bit of AP */
+    uint8_t ssid[MLAN_MAX_SSID_LENGTH];  /*!< ssid array */
+    int ssid_len;                        /*!< SSID length */
+    uint8_t Channel;                     /*!< Channel associated to the BSSID */
+    uint8_t RSSI;                        /*!< Received signal strength */
+    uint16_t beacon_period;              /*!< Beacon period */
+    uint16_t dtim_period;                /*!< DTIM period */
+    _SecurityMode_t WPA_WPA2_WEP;        /*!< Security mode info */
+    _Cipher_t wpa_mcstCipher;            /*!< WPA multicast cipher */
+    _Cipher_t wpa_ucstCipher;            /*!< WPA unicast cipher */
+    _Cipher_t rsn_mcstCipher;            /*!< No security multicast cipher */
+    _Cipher_t rsn_ucstCipher;            /*!< No security unicast cipher */
+    bool is_pmf_required;                /*!< Is pmf required flag */
+    t_u8 ap_mfpc;                        /*!< MFPC bit of AP */
+    t_u8 ap_mfpr;                        /*!< MFPR bit of AP */
+    t_u8 ap_pwe;                         /*!< PWE bit of AP */
 
     /*!<
      **  WPA_WPA2 = 0 => Security not enabled
@@ -307,17 +301,17 @@ struct wifi_scan_result2
      */
     bool phtcap_ie_present;  /*!< PHT CAP IE present info */
     bool phtinfo_ie_present; /*!< PHT INFO IE present info */
-#ifdef CONFIG_11AC
+#if CONFIG_11AC
     /** 11AC VHT capab support */
     bool pvhtcap_ie_present;
 #endif
-#ifdef CONFIG_11AX
+#if CONFIG_11AX
     /** 11AX HE capab support */
     bool phecap_ie_present;
 #endif
 
-    bool wmm_ie_present; /*!< WMM IE present info */
-    uint16_t band;       /*!< Band info */
+    bool wmm_ie_present;                       /*!< WMM IE present info */
+    uint16_t band;                             /*!< Band info */
 
     bool wps_IE_exist;                         /*!< WPS IE exist info */
     uint16_t wps_session;                      /*!< WPS session */
@@ -326,18 +320,18 @@ struct wifi_scan_result2
     uint8_t trans_bssid[MLAN_MAC_ADDR_LENGTH]; /*!< Trans bssid array */
     uint8_t trans_ssid[MLAN_MAX_SSID_LENGTH];  /*!< Trans ssid array */
     int trans_ssid_len;                        /*!< Trans bssid length */
-#ifdef CONFIG_DRIVER_MBO
-    bool mbo_assoc_disallowed; /*!< MBO disallowed */
+#if CONFIG_DRIVER_MBO
+    bool mbo_assoc_disallowed;                 /*!< MBO disallowed */
 #endif
-#ifdef CONFIG_11R
+#if CONFIG_11R
     /** Mobility domain identifier */
     uint16_t mdid;
 #endif
-#ifdef CONFIG_11K
+#if CONFIG_11K
     /** Neigbort report support */
     bool neighbor_report_supported;
 #endif
-#ifdef CONFIG_11V
+#if CONFIG_11V
     /** bss transition support */
     bool bss_transition_supported;
 #endif
@@ -409,86 +403,86 @@ typedef struct
     uint32_t remain_period;
 } wifi_remain_on_channel_t;
 
-#ifdef CONFIG_11AX
+#if CONFIG_11AX
 /** TX Rate Setting */
 typedef PACK_START struct _txrate_setting
 {
     /** Preamble */
-    t_u16 preamble : 2;   /*BIT1-BIT0:
-                           *  For legacy 11b: preamble type
-                           *    00    = long
-                           *    01    = short
-                           *    10/11  = reserved
-                           *  For legacy 11g: reserved
-                           *  For 11n: Green field PPDU indicator
-                           *    00 = HT-mix
-                           *    01 = HT-GF
-                           *    10/11 = reserved.
-                           *  For 11ac: reserved.
-                           *  For 11ax:
-                           *    00 = HE-SU
-                           *    01 = HE-EXT-SU
-                           *    10 = HE-MU
-                           *    11 = HE trigger based
-                           */
+    t_u16 preamble : 2; /*BIT1-BIT0:
+                         *  For legacy 11b: preamble type
+                         *    00    = long
+                         *    01    = short
+                         *    10/11  = reserved
+                         *  For legacy 11g: reserved
+                         *  For 11n: Green field PPDU indicator
+                         *    00 = HT-mix
+                         *    01 = HT-GF
+                         *    10/11 = reserved.
+                         *  For 11ac: reserved.
+                         *  For 11ax:
+                         *    00 = HE-SU
+                         *    01 = HE-EXT-SU
+                         *    10 = HE-MU
+                         *    11 = HE trigger based
+                         */
     /** Bandwidth */
-    t_u16 bandwidth : 3;  /* BIT2- BIT4
-                           * For 11n and 11ac traffic: Bandwidth
-                           *    0 = 20Mhz
-                           *    1 = 40Mhz
-                           *    2 = 80 Mhz
-                           *    3 = 160 Mhz
-                           *    4-7 = reserved
-                           *  For legacy rate : BW>0 implies non-HT duplicates.
-                           *  For HE SU PPDU:
-                           *    0 = 20Mhz
-                           *    1 = 40Mhz
-                           *    2 = 80 Mhz
-                           *    3 = 160 Mhz
-                           *    4-7 = reserved
-                           *  For HE ER SU PPDU:
-                           *    0 = 242-tone RU
-                           *    1 = upper frequency 106 tone RU within the primary 20 Mhz.
-                           *  For HE MU PPDU:
-                           *    0 = 20Mhz.
-                           *    1 = 40Mhz.
-                           *    2 = 80Mhz non-preamble puncturing mode
-                           *    3 = 160Mhz and 80+80 Mhz non-preamble.
-                           *    4 = for preemble puncturing in 80 Mhz ,
-                           *        where in the preamble only the secondary 20Mhz is punctured.
-                           *    5 = for preemble puncturing in 80 Mhz ,
-                           *        where in the preamble only one of the two 20Mhz subchannels in the secondary 40Mhz is
-                           * punctured.  6 = for preemble puncturing in 160 Mhz or 80 Mhz + 80 Mhz,  where in the primary
-                           * 80 Mhz of the preamble only the secondary 20 Mhz is punctured.  7 = for preemble puncturing
-                           * in 160 Mhz or 80 Mhz + 80 Mhz,  where in the primary 80 Mhz of the preamble the primary 40
-                           * Mhz is present.
-                           */
+    t_u16 bandwidth : 3; /* BIT2- BIT4
+                          * For 11n and 11ac traffic: Bandwidth
+                          *    0 = 20Mhz
+                          *    1 = 40Mhz
+                          *    2 = 80 Mhz
+                          *    3 = 160 Mhz
+                          *    4-7 = reserved
+                          *  For legacy rate : BW>0 implies non-HT duplicates.
+                          *  For HE SU PPDU:
+                          *    0 = 20Mhz
+                          *    1 = 40Mhz
+                          *    2 = 80 Mhz
+                          *    3 = 160 Mhz
+                          *    4-7 = reserved
+                          *  For HE ER SU PPDU:
+                          *    0 = 242-tone RU
+                          *    1 = upper frequency 106 tone RU within the primary 20 Mhz.
+                          *  For HE MU PPDU:
+                          *    0 = 20Mhz.
+                          *    1 = 40Mhz.
+                          *    2 = 80Mhz non-preamble puncturing mode
+                          *    3 = 160Mhz and 80+80 Mhz non-preamble.
+                          *    4 = for preemble puncturing in 80 Mhz ,
+                          *        where in the preamble only the secondary 20Mhz is punctured.
+                          *    5 = for preemble puncturing in 80 Mhz ,
+                          *        where in the preamble only one of the two 20Mhz subchannels in the secondary 40Mhz is
+                          * punctured.  6 = for preemble puncturing in 160 Mhz or 80 Mhz + 80 Mhz,  where in the primary
+                          * 80 Mhz of the preamble only the secondary 20 Mhz is punctured.  7 = for preemble puncturing
+                          * in 160 Mhz or 80 Mhz + 80 Mhz,  where in the primary 80 Mhz of the preamble the primary 40
+                          * Mhz is present.
+                          */
     /** Short GI */
-    t_u16 shortGI : 2;    /*BIT5- BIT6
-                           *  For legacy: not used
-                           *  For 11n: 00 = normal, 01 =shortGI, 10/11 = reserved
-                           *  For 11ac: SGI map to VHT-SIG-A2[0]
-                           *           VHT-SIG-A2[1] is set to 1 if short guard interval is used
-                           *           and NSYM mod 10 = 9, otherwise set to 0.
-                           *  For 11ax:
-                           *           00 = 1xHELTF+GI0.8usec
-                           *           01 = 2xHELTF+GI0.8usec
-                           *           10 = 2xHELTF+GI1.6usec
-                           *           11 = 4xHELTF+GI0.8 usec if both DCM and STBC are 1
-                           *                4xHELTF+GI3.2 usec otherwise
-                           */
+    t_u16 shortGI : 2; /*BIT5- BIT6
+                        *  For legacy: not used
+                        *  For 11n: 00 = normal, 01 =shortGI, 10/11 = reserved
+                        *  For 11ac: SGI map to VHT-SIG-A2[0]
+                        *           VHT-SIG-A2[1] is set to 1 if short guard interval is used
+                        *           and NSYM mod 10 = 9, otherwise set to 0.
+                        *  For 11ax:
+                        *           00 = 1xHELTF+GI0.8usec
+                        *           01 = 2xHELTF+GI0.8usec
+                        *           10 = 2xHELTF+GI1.6usec
+                        *           11 = 4xHELTF+GI0.8 usec if both DCM and STBC are 1
+                        *                4xHELTF+GI3.2 usec otherwise
+                        */
     /** STBC */
-    t_u16 stbc : 1;       // BIT7, 0: no STBC; 1: STBC
+    t_u16 stbc : 1; // BIT7, 0: no STBC; 1: STBC
     /** DCM */
-    t_u16 dcm : 1;        // BIT8, 0: no DCM; 1: DCM used.
+    t_u16 dcm : 1; // BIT8, 0: no DCM; 1: DCM used.
     /** Adv coding */
     t_u16 adv_coding : 1; // BIT9, 0: BCC; 1: LDPC.
     /** Doppler */
-    t_u16 doppler : 2;    /* BIT11-BIT10,
-                             00: Doppler0
-                             01: Doppler 1 with Mma =10
-                             10: Doppler 1 with Mma =20
-                          */
+    t_u16 doppler : 2; /* BIT11-BIT10,
+                          00: Doppler0
+                          01: Doppler 1 with Mma =10
+                          10: Doppler 1 with Mma =20
+                       */
     /** Max PK text */
     t_u16 max_pktext : 2; /*BIT12-BIT13:
                            * Max packet extension
@@ -497,10 +491,10 @@ typedef PACK_START struct _txrate_setting
                            *  2 - 16 usec.
                            */
     /** Reserved */
-    t_u16 reserverd : 2;  // BIT14-BIT15
+    t_u16 reserverd : 2; // BIT14-BIT15
 } PACK_END txrate_setting;
 
-#ifdef CONFIG_MMSF
+#if CONFIG_MMSF
 typedef struct
 {
     t_u8 *enable;
@@ -519,7 +513,7 @@ typedef PACK_START struct _wifi_rate_cfg_t
     t_u32 rate_index;
     /** Rate rate */
     t_u32 rate;
-#if defined(CONFIG_11AC) || defined(CONFIG_11AX)
+#if (CONFIG_11AC) || (CONFIG_11AX)
     /** NSS */
     t_u32 nss;
 #endif
@@ -549,7 +543,7 @@ typedef PACK_START struct _wifi_data_rate_t
     t_u32 tx_mcs_index;
     /** MCS index */
     t_u32 rx_mcs_index;
-#if defined(CONFIG_11AC) || defined(CONFIG_11AX)
+#if (CONFIG_11AC) || (CONFIG_11AX)
     /** NSS */
     t_u32 tx_nss;
     /** NSS */
@@ -573,6 +567,10 @@ typedef PACK_START struct _wifi_ds_rate
 {
     /** Sub-command */
     enum wifi_ds_command_type sub_command;
+#if CONFIG_AUTO_NULL_TX
+    /** Only set auto tx fix rate */
+    t_u16 auto_null_fixrate_enable;
+#endif
     /** Rate configuration parameter */
     union
     {
@@ -655,6 +653,10 @@ typedef PACK_START struct _wifi_antcfg_t
     t_u16 *evaluate_time;
     /** Current antenna*/
     t_u16 *current_antenna;
+#ifdef RW610
+    /** Evaluate mode */
+    t_u8 *evaluate_mode;
+#endif
 } PACK_END wifi_antcfg_t;
 
 /** CW_MODE_CTRL structure */
@@ -856,7 +858,7 @@ typedef struct
     t_u16 dst_port;
 } wifi_nat_keep_alive_t;
 
-#ifdef CONFIG_CLOUD_KEEP_ALIVE
+#if CONFIG_CLOUD_KEEP_ALIVE
 #define MKEEP_ALIVE_IP_PKT_MAX 256
 /** Cloud keep alive information */
 typedef struct
@@ -1044,9 +1046,9 @@ typedef PACK_START struct
     /** Chnannel descriptor */
     wifi_channel_desc_t chan_desc;
     /** Channel Modulation groups */
-#ifdef CONFIG_11AX
+#if CONFIG_11AX
     wifi_txpwrlimit_entry_t txpwrlimit_entry[20];
-#elif defined(CONFIG_11AC)
+#elif (CONFIG_11AC)
     wifi_txpwrlimit_entry_t txpwrlimit_entry[16];
 #else
     wifi_txpwrlimit_entry_t txpwrlimit_entry[10];
@@ -1065,14 +1067,14 @@ typedef PACK_START struct
     /** Number of Channels */
     t_u8 num_chans;
     /** TRPC config */
-#if defined(SD9177)
+#if defined(SD9177) || defined(IW610)
     wifi_txpwrlimit_config_t txpwrlimit_config[43];
 #else
     wifi_txpwrlimit_config_t txpwrlimit_config[40];
 #endif
 } PACK_END wifi_txpwrlimit_t;
 
-#ifdef CONFIG_11AX
+#if CONFIG_11AX
 typedef PACK_START struct _wifi_rupwrlimit_config_t
 {
     /** start freq */
@@ -1119,7 +1121,7 @@ typedef PACK_START struct
     t_u8 val[4];
 } PACK_END wifi_11ax_config_t;
 
-#ifdef CONFIG_11AX_TWT
+#if CONFIG_11AX_TWT
 /** Wi-Fi TWT setup configuration */
 typedef PACK_START struct
 {
@@ -1149,6 +1151,10 @@ typedef PACK_START struct
     t_u16 twt_mantissa;
     /** TWT Request Type, 0: REQUEST_TWT, 1: SUGGEST_TWT*/
     t_u8 twt_request;
+    /** TWT Setup State. Set to 0 by driver, filled by FW in response*/
+    t_u8 twt_setup_state;
+    /** TWT link lost timeout threshold */
+    t_u16 bcnMiss_threshold;
 } PACK_END wifi_twt_setup_config_t;
 
 /** Wi-Fi Teardown Configuration */
@@ -1185,7 +1191,7 @@ typedef PACK_START struct
 } PACK_END wifi_btwt_config_t;
 
 #define WLAN_BTWT_REPORT_LEN     9
-#define WLAN_BTWT_REPORT_MAX_NUM 4
+#define WLAN_BTWT_REPORT_MAX_NUM 6
 /** Wi-Fi TWT Report Configuration */
 typedef PACK_START struct
 {
@@ -1198,10 +1204,11 @@ typedef PACK_START struct
     /** TWT report buffer */
     t_u8 data[WLAN_BTWT_REPORT_LEN * WLAN_BTWT_REPORT_MAX_NUM];
 } PACK_END wifi_twt_report_t;
+
 #endif /* CONFIG_11AX_TWT */
 #endif
 
-#ifdef CONFIG_WIFI_CLOCKSYNC
+#if CONFIG_WIFI_CLOCKSYNC
 /** Wi-Fi Clock sync configuration */
 typedef PACK_START struct
 {
@@ -1230,64 +1237,8 @@ typedef PACK_START struct
     t_s32 tsf_offset;
 } PACK_END wifi_tsf_info_t;
 #endif /* CONFIG_WIFI_CLOCKSYNC */
-#ifdef CONFIG_WLAN_BRIDGE
-/**
- * Data structure for Bridge Autolink Configuration
- */
-typedef struct
-{
-    /** Auto Link Periodical scan interval */
-    uint32_t scan_timer_interval;
-    /** The condition triggers Auto Link periodical scan
-     *  0: trigger scan when current link is not good
-     *  1: trigger scan by host setting(always periodical scan)
-     */
-    uint8_t scan_timer_condition;
-    /** Auto Link periodical scan channel list:
-     *  0: only scan with previous In-STA associated channel
-     *  1: 2.4G all channels
-     */
-    uint8_t scan_channel_list;
-} wifi_autolink_cfg_t;
 
-/**
- * Data structure for Bridge Configuration
- */
-#define ENABLE_AUTOLINK_BIT 1
-#define HIDDEN_SSID_BIT     2
-typedef struct
-{
-    /** Bit 0: Enable/Disable bridge mode,
-     *  Bit 1: Enable/Disable auto link,
-     *  Bit 2: Enable/Disable hidden ssid
-     */
-    uint8_t enable;
-    /** Auto Link */
-    bool auto_link;
-    /** Hideen Bridge SSID */
-    bool hidden_ssid;
-    /** EX-AP SSID Length */
-    uint8_t ex_ap_ssid_len;
-    /** EX-AP SSID */
-    char ex_ap_ssid[MLAN_MAX_SSID_LENGTH];
-    /** EX-AP Passphrase length */
-    uint8_t ex_ap_pass_len;
-    /** EX-AP Passphrase */
-    char ex_ap_pass[MLAN_MAX_PASS_LENGTH];
-    /** Bridge SSID Length */
-    uint8_t bridge_ssid_len;
-    /** Bridge SSID */
-    char bridge_ssid[MLAN_MAX_SSID_LENGTH];
-    /** Bridge Passphrase length */
-    uint8_t bridge_pass_len;
-    /** Bridge Passphrase */
-    char bridge_pass[MLAN_MAX_PASS_LENGTH];
-    /**auto link configuration*/
-    wifi_autolink_cfg_t autolink;
-} wifi_bridge_cfg_t;
-#endif
-
-#ifdef CONFIG_NET_MONITOR
+#if CONFIG_NET_MONITOR
 typedef t_u8 wifi_802_11_mac_addr[MLAN_MAC_ADDR_LENGTH];
 
 /** Network monitor structure */
@@ -1314,6 +1265,7 @@ typedef PACK_START struct
 {
     /** Frame control flags */
     uint8_t frame_ctrl_flags;
+	/** time interval */
     uint16_t duration;
     /** Destination MAC address */
     char dest[MLAN_MAC_ADDR_LENGTH];
@@ -1321,15 +1273,19 @@ typedef PACK_START struct
     char src[MLAN_MAC_ADDR_LENGTH];
     /** BSSID */
     char bssid[MLAN_MAC_ADDR_LENGTH];
+	/** Fragment number of frame fragments */
     uint16_t seq_frag_num;
-    /** Timestamp */
+    /** Beacon timestamp */
     uint8_t timestamp[8];
+	/** Beacon interval, Send periodically at Beacon time intervals, typically abbreviated as TU, representing 1024 microseconds */
     uint16_t beacon_interval;
+	/** capability info, when sending beacon signals, it is used to notify all parties of the performance of the network */
     uint16_t cap_info;
+	/** element identification code */
     uint8_t ssid_element_id;
     /** SSID Length */
     uint8_t ssid_len;
-    /* SSID */
+    /** SSID string */
     char ssid[MLAN_MAX_SSID_LENGTH];
 } PACK_END wifi_beacon_info_t;
 
@@ -1338,12 +1294,15 @@ typedef PACK_START struct
 {
     /** Frame control flags */
     uint8_t frame_ctrl_flags;
+	/** data time interval */
     uint16_t duration;
+	/** basic service set identifier */
     char bssid[MLAN_MAC_ADDR_LENGTH];
     /** Source MAC address */
     char src[MLAN_MAC_ADDR_LENGTH];
     /** Destination MAC address */
     char dest[MLAN_MAC_ADDR_LENGTH];
+	/** sequence frage number */
     uint16_t seq_frag_num;
     /** QOS control */
     uint16_t qos_ctrl;
@@ -1383,7 +1342,7 @@ typedef enum
 typedef PACK_START struct
 {
     wifi_frame_type_t frame_type;
-#ifdef CONFIG_NET_MONITOR
+#if CONFIG_NET_MONITOR
     union
     {
         wifi_beacon_info_t beacon_info;
@@ -1397,36 +1356,6 @@ typedef struct
     uint8_t mfpc;
     uint8_t mfpr;
 } wifi_pmf_params_t;
-
-#ifndef CONFIG_MLAN_WMSDK
-/** mix rate information structure */
-typedef PACK_START struct _mix_rate_info
-{
-    /**  bit0: LGI: gi=0, SGI: gi= 1 */
-    /**  bit1-2: 20M: bw=0, 40M: bw=1, 80M: bw=2, 160M: bw=3  */
-    /**  bit3-4: LG: format=0, HT: format=1, VHT: format=2 */
-    /**  bit5: LDPC: 0-not support,  1-support */
-    /**  bit6-7:reserved */
-    t_u8 rate_info;
-    /** MCS index */
-    t_u8 mcs_index;
-    /** bitrate, in 500Kbps */
-    t_u16 bitrate;
-} PACK_END mix_rate_info, *pmix_rate_info;
-
-/** rxpd extra information structure */
-typedef PACK_START struct _rxpd_extra_info
-{
-    /** flags */
-    t_u8 flags;
-    /** channel.flags */
-    t_u16 channel_flags;
-    /** mcs.known */
-    t_u8 mcs_known;
-    /** mcs.flags */
-    t_u8 mcs_flags;
-} PACK_END rxpd_extra_info, *prxpd_extra_info;
-#endif
 
 /** Channel scan parameters */
 typedef struct
@@ -1493,9 +1422,14 @@ typedef PACK_START struct _wifi_auto_reconnect_config_t
     t_u16 flags;
 } PACK_END wifi_auto_reconnect_config_t;
 
+/** Scan all the channels in specified band */
+#define BAND_SPECIFIED 0x80U
+
 /** Scan channel list */
 typedef PACK_START struct _wifi_scan_channel_list_t
 {
+    /** Channel scan parameter : Radio type */
+    t_u8 radio_type;
     /** Channel numder */
     t_u8 chan_number;
     /** Scan type Active = 1, Passive = 2 */
@@ -1505,14 +1439,17 @@ typedef PACK_START struct _wifi_scan_channel_list_t
 } PACK_END wifi_scan_channel_list_t;
 
 /* Configuration for wireless scanning */
+#if defined(RW610) && (CONFIG_ANT_DETECT)
+#define ANT_DETECT_MAX_CHANNEL_LIST 50U
+#endif
 #define MAX_CHANNEL_LIST 6
-#ifdef CONFIG_COMBO_SCAN
+#if CONFIG_COMBO_SCAN
 #define MAX_NUM_SSID 2
 #endif
 /** V2 scan parameters */
 typedef PACK_START struct _wifi_scan_params_v2_t
 {
-#ifdef CONFIG_WPA_SUPP
+#if CONFIG_WPA_SUPP
     /** Scan Only */
     t_u8 scan_only;
     /** BSSID present */
@@ -1523,7 +1460,7 @@ typedef PACK_START struct _wifi_scan_params_v2_t
     /** BSSID to scan */
     t_u8 bssid[MLAN_MAC_ADDR_LENGTH];
     /** SSID to scan */
-#ifdef CONFIG_COMBO_SCAN
+#if CONFIG_COMBO_SCAN
     char ssid[MAX_NUM_SSID][MLAN_MAX_SSID_LENGTH + 1];
 #else
     char ssid[MLAN_MAX_SSID_LENGTH + 1];
@@ -1531,14 +1468,18 @@ typedef PACK_START struct _wifi_scan_params_v2_t
     /** Number of channels */
     t_u8 num_channels;
     /** Channel list with channel information */
+#if defined(RW610) && (CONFIG_ANT_DETECT)
+    wifi_scan_channel_list_t chan_list[ANT_DETECT_MAX_CHANNEL_LIST];
+#else
     wifi_scan_channel_list_t chan_list[MAX_CHANNEL_LIST];
+#endif
     /** Number of probes */
     t_u8 num_probes;
-#ifdef CONFIG_SCAN_WITH_RSSIFILTER
+#if CONFIG_SCAN_WITH_RSSIFILTER
     /** Threshold of rssi */
     t_s16 rssi_threshold;
 #endif
-#ifdef CONFIG_SCAN_CHANNEL_GAP
+#if CONFIG_SCAN_CHANNEL_GAP
     /** scan channel gap */
     t_u16 scan_chan_gap;
 #endif
@@ -1546,7 +1487,7 @@ typedef PACK_START struct _wifi_scan_params_v2_t
     int (*cb)(unsigned int count);
 } PACK_END wifi_scan_params_v2_t;
 
-#ifdef CONFIG_RF_TEST_MODE
+#if CONFIG_RF_TEST_MODE
 /** Configuration for Manufacturing generic command */
 typedef PACK_START struct _wifi_mfg_cmd_generic_cfg
 {
@@ -1606,7 +1547,23 @@ typedef PACK_START struct _wifi_mfg_cmd_tx_frame
     /** STBC */
     t_u32 stbc;
     /** power id */
-    t_u32 rsvd[2];
+    t_u32 rsvd[1];
+    /**signal bw*/
+    t_u32 signal_bw;
+    /** NumPkt */
+    t_u32 NumPkt;
+    /** MaxPE */
+    t_u32 MaxPE;
+    /** BeamChange */
+    t_u32 BeamChange;
+    /** Dcm */
+    t_u32 Dcm;
+    /** Doppler */
+    t_u32 Doppler;
+    /** MidP */
+    t_u32 MidP;
+    /** QNum */
+    t_u32 QNum;
 } PACK_END wifi_mfg_cmd_tx_frame_t;
 
 /** Configuration for Manufacturing command Tx Continuous */
@@ -1687,9 +1644,41 @@ typedef PACK_START struct wifi_mfg_cmd_IEEEtypes_CtlBasicTrigHdr
     /** Trigger Dependent User Info Field **/
     mfg_cmd_IEEETypes_BasicHETrigUserInfo_t basic_trig_user_info;
 } PACK_END wifi_mfg_cmd_IEEEtypes_CtlBasicTrigHdr_t;
+
+typedef PACK_START struct wifi_mfg_cmd_otp_mac_addr_rd_wr
+{
+    /** MFG command code */
+    t_u32 mfg_cmd;
+    /** Action */
+    t_u16 action;
+    /** Device ID */
+    t_u16 device_id;
+    /** MFG Error code */
+    t_u32 error;
+    /** Destination MAC Address */
+    t_u8 mac_addr[MLAN_MAC_ADDR_LENGTH];
+} PACK_END wifi_mfg_cmd_otp_mac_addr_rd_wr_t;
+
+typedef PACK_START struct wifi_mfg_cmd_otp_cal_data_rd_wr
+{
+    /** MFG command code */
+    t_u32 mfg_cmd;
+    /** Action */
+    t_u16 action;
+    /** Device ID */
+    t_u16 device_id;
+    /** MFG Error code */
+    t_u32 error;
+    /** CAL Data write status */
+    t_u32 cal_data_status;
+    /** CAL Data Length*/
+    t_u32 cal_data_len;
+    /** Destination MAC Address */
+    t_u8 cal_data[CAL_DATA_LEN];
+} PACK_END wifi_mfg_cmd_otp_cal_data_rd_wr_t;
 #endif
 
-#ifdef CONFIG_HEAP_DEBUG
+#if CONFIG_HEAP_DEBUG
 #define MAX_FUNC_SYMBOL_LEN    64
 #define OS_MEM_STAT_TABLE_SIZE 128
 
@@ -1704,7 +1693,7 @@ typedef struct
 } wifi_os_mem_info;
 #endif
 
-#ifdef CONFIG_MULTI_CHAN
+#if CONFIG_MULTI_CHAN
 typedef PACK_START struct
 {
     /** Channel Index*/
@@ -1721,70 +1710,8 @@ typedef PACK_START struct
 } PACK_END wifi_drcs_cfg_t;
 #endif
 
-#ifdef CONFIG_1AS
-#define DOT1AS_TM_ROLE_TRANSMITTER 0
-#define DOT1AS_TM_ROLE_RECEIVER    1
 
-#define DOT1AS_TM_STATUS_COMPLETE   0
-#define DOT1AS_TM_STATUS_INPROGRESS 1
-
-typedef struct
-{
-    /* host time in nano secs */
-    t_u64 time;
-    /* fw time in nano secs */
-    t_u64 fw_time;
-} wifi_correlated_time_t;
-
-typedef struct _wifi_dot1as_info_t
-{
-    /* 0 - completed or unstarted, 1 - in progress */
-    t_u8 status;
-    /* 0 - master(transmitter, send TM), 1 - slave(receiver, receive TM) */
-    t_u8 role;
-    /* current number of TM frame, used in master mode */
-    t_u8 tm_num;
-    /* max number of TM frames, used in master mode */
-    t_u8 max_tm_num;
-    /* peer addr */
-    t_u8 peer_addr[MLAN_MAC_ADDR_LENGTH];
-    /* dialog_token */
-    t_u8 dialog_token;
-    /* prev_dialog_token */
-    t_u8 prev_dialog_token;
-    /* time of TX TM frame depart */
-    t_u32 t1;
-    /* time of TX TM frame acked */
-    t_u32 t4;
-    /* time of RX TM frame receive */
-    t_u32 t2;
-    /* time of RX TM frame ack */
-    t_u32 t3;
-    /* fw status error of t1 in 10ns */
-    t_u8 t1_err;
-    /* fw status error of t4 in 10ns */
-    t_u8 t4_err;
-    /* max error of t1 in 10ns */
-    t_u8 max_t1_err;
-    /* max error of t4 in 10ns */
-    t_u8 max_t4_err;
-    /* error of t2 in 10ns */
-    t_u8 t2_err;
-    /* error of t3 in 10ns */
-    t_u8 t3_err;
-    /* max error of t2 in 10ns */
-    t_u8 max_t2_err;
-    /* max error of t3 in 10ns */
-    t_u8 max_t3_err;
-    /* egress time of TX TM frame */
-    t_u64 egress_time;
-    /* ingress time of RX TM frame */
-    t_u64 ingress_time;
-} wifi_dot1as_info_t;
-
-#endif
-
-#ifdef CONFIG_SUBSCRIBE_EVENT_SUPPORT
+#if CONFIG_SUBSCRIBE_EVENT_SUPPORT
 /** Type definition of mlan_ds_subscribe_evt for subscribe events */
 typedef struct _wifi_ds_subscribe_evt
 {
@@ -1847,7 +1774,7 @@ typedef struct _wifi_ds_subscribe_evt
 } wifi_ds_subscribe_evt;
 #endif
 
-#ifdef CONFIG_CSI
+#if CONFIG_CSI
 #define CSI_FILTER_MAX 16
 /** Structure of CSI filters */
 typedef PACK_START struct _wifi_csi_filter_t
@@ -1864,6 +1791,8 @@ typedef PACK_START struct _wifi_csi_filter_t
 /** Structure of CSI parameters */
 typedef PACK_START struct _wifi_csi_config_params_t
 {
+    /** 0: station; 1: uap */
+	t_u8 bss_type;
     /** CSI enable flag. 1: enable, 2: disable */
     t_u16 csi_enable;
     /** Header ID*/
@@ -1887,7 +1816,7 @@ typedef PACK_START struct _wifi_csi_config_params_t
 } PACK_END wifi_csi_config_params_t;
 #endif /* CSI_SUPPORT */
 
-#if defined(CONFIG_WIFI_IND_RESET) && defined(CONFIG_WIFI_IND_DNLD)
+#if (CONFIG_WIFI_IND_RESET) && (CONFIG_WIFI_IND_DNLD)
 /** Wi-Fi independent reset config */
 typedef PACK_START struct
 {
@@ -1898,7 +1827,7 @@ typedef PACK_START struct
 } PACK_END wifi_indrst_cfg_t;
 #endif
 
-#ifdef CONFIG_INACTIVITY_TIMEOUT_EXT
+#if CONFIG_INACTIVITY_TIMEOUT_EXT
 /** Type definition of wifi_inactivity_to
  *  for MLAN_OID_PM_CFG_INACTIVITY_TO
  */
@@ -1916,4 +1845,65 @@ typedef PACK_START struct
     t_u32 ps_cmd_timeout;
 } PACK_END wifi_inactivity_to_t;
 #endif
+
+#if CONFIG_AUTO_NULL_TX
+/** auto null tx information */
+typedef struct
+{
+    /** 1-start 0-stop */
+    t_u8 start;
+    /** bit15:14 unit: 00-s 01-us 10-ms 11-one_shot  bit13-0: interval */
+    t_u16 interval;
+    /** bit7-4: bandwidth. bit3-0: priority, ignored if non-WMM */
+    t_u8 priority;
+    /** Destination MAC address */
+    t_u8 dst_mac[MLAN_MAC_ADDR_LENGTH];
+    /** Source MAC address */
+    t_u8 src_mac[MLAN_MAC_ADDR_LENGTH];
+} wifi_auto_null_tx_t;
+#endif
+
+#if defined(RW610) && (CONFIG_ANT_DETECT)
+#define NORMAL_DETECT_MODE                 0
+#define QUICK_DETECT_MODE                  1
+#define PCB_DETECT_MODE                    2
+#define PCB_DETECT_MODE_CHECK_DEVICE_COUNT 2
+#define ANT_DETECT_MAX_SCAN_ENTRY          5
+#define MAX_ANTENNA_PORT_NUM               4
+typedef PACK_START struct _scan_result_entry_t
+{
+    char ssid[33];
+    unsigned int ssid_len;
+    char bssid[6];
+    unsigned int channel;
+    unsigned char rssi;
+} PACK_END scan_result_entry_t;
+
+typedef PACK_START struct _wlan_ant_info_t
+{
+    uint8_t scan_done;
+    unsigned char avg_rssi;
+    uint8_t entry_idx;
+    scan_result_entry_t scan_entry[ANT_DETECT_MAX_SCAN_ENTRY];
+} PACK_END wlan_ant_scan_info_t;
+
+typedef PACK_START struct _cfg_scan_channel_list_t
+{
+    uint8_t num_channels;
+    uint8_t chan_number[ANT_DETECT_MAX_CHANNEL_LIST];
+} PACK_END cfg_scan_channel_list_t;
+
+typedef PACK_START struct _wlan_ant_detect_data_t
+{
+    uint8_t detect_mode;
+    int detect_done;
+    uint16_t current_ant;
+    uint8_t ant_port_count;
+    uint16_t best_ant;
+    uint16_t next_best_ant;
+    cfg_scan_channel_list_t *channel_list;
+    wlan_ant_scan_info_t scan_info[MAX_ANTENNA_PORT_NUM];
+} PACK_END wlan_ant_detect_data_t;
+#endif
+
 #endif /* __WIFI_DECL_H__ */
